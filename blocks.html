@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rising Blocks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: "Lexend"; src: url("fonts/lexend.woff2") format("woff2"); font-weight: 300 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 600 800; font-display: swap; }
+
+/* Layout: score row on top, the well of blocks filling the middle, Raise and Pause below. */
+:root {
+  --paper: #EFEDF5; --surface: #FFFFFF; --ink: #1D1A2B; --ink-soft: #625D78; --line: #D6D2E4;
+  --accent: #6A4FC9; --accent-ink: #FFFFFF; --accent-soft: #E3DDF7; --well: #E4E0F0; --danger: #D9473A;
+  --shadow: 0 1px 2px rgba(29,26,43,.06), 0 6px 20px rgba(29,26,43,.08);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Lexend", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #110F19; --surface: #1C1928; --ink: #ECE9F6; --ink-soft: #9C97B2; --line: #2F2B40;
+    --accent: #A08BF0; --accent-ink: #110F19; --accent-soft: #2E2650; --well: #191626; --danger: #F2705F;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #110F19; --surface: #1C1928; --ink: #ECE9F6; --ink-soft: #9C97B2; --line: #2F2B40;
+  --accent: #A08BF0; --accent-ink: #110F19; --accent-soft: #2E2650; --well: #191626; --danger: #F2705F;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 15px; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.app {
+  max-width: 520px; margin: 0 auto; height: 100%; min-height: 560px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.topbar h1 { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -.01em; margin: 0; flex: 1; text-align: center; }
+.icon-btn { width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: grid; place-items: center; color: var(--ink-soft); font-size: 20px; font-weight: 600; }
+.icon-btn:hover { background: var(--well); color: var(--ink); }
+.icon-btn svg { width: 24px; height: 24px; }
+
+/* Start screen */
+.start { display: flex; flex-direction: column; gap: 18px; padding-top: 3vh; }
+.start h2 { font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 1; margin: 0; letter-spacing: -.025em; }
+.start p { margin: 0; color: var(--ink-soft); line-height: 1.5; max-width: 60ch; }
+.demo { display: block; margin: 4px auto 0; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 6px; }
+.seg { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: 4px; background: var(--well); padding: 4px; border-radius: 12px; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 10px 0; font-size: 14px; color: var(--ink-soft); }
+.seg button.on { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: var(--shadow); }
+.btn { border: 0; border-radius: 14px; padding: 14px 18px; font-size: 16px; font-weight: 500; background: var(--well); min-height: 50px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.bests { font-size: 13px; color: var(--ink-soft); }
+.bests b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* Game */
+.hud { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; }
+.hud > div { display: flex; flex-direction: column; gap: 1px; }
+.hud > div:nth-child(2) { align-items: center; } .hud > div:nth-child(3) { align-items: flex-end; }
+.hud .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.hud .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hud .v.low { color: var(--danger); }
+.well-wrap { flex: 1 1 0; min-height: 200px; display: grid; place-items: center; position: relative; }
+canvas { display: block; border-radius: 12px; touch-action: none; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+.paused-cover { position: absolute; inset: 0; display: grid; place-items: center; }
+.paused-cover button { width: 76px; height: 76px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; box-shadow: var(--shadow); }
+.paused-cover svg { width: 32px; height: 32px; }
+.well-wrap.vs { grid-template-columns: 1fr auto; gap: 10px; place-items: start center; }
+.side { width: 92px; display: flex; flex-direction: column; gap: 8px; align-self: stretch; }
+.side .who { font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
+.side .who small { font-weight: 400; color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 13px; }
+.side canvas { border-radius: 6px; }
+.side .label { margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+.chip { font-size: 11px; font-weight: 600; padding: 3px 6px; border-radius: 6px; background: #8E879E; color: #fff; font-variant-numeric: tabular-nums; }
+.chip.soon { background: var(--danger); }
+.chips .none { font-size: 11px; color: var(--ink-soft); }
+.controls { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.controls.turning { grid-template-columns: auto 1fr auto auto; }
+.controls.turning #turn-left, .controls.turning #turn-right { min-width: 52px; font-size: 18px; }
+.controls .btn { min-height: 52px; }
+#raise { background: var(--accent-soft); color: var(--ink); touch-action: none; }
+#raise.down { background: var(--accent); color: var(--accent-ink); }
+#raise small { display: block; font-size: 11px; font-weight: 400; color: var(--ink-soft); }
+#raise.down small { color: inherit; opacity: .8; }
+
+/* Sheets */
+.overlay { position: fixed; inset: 0; z-index: 20; background: rgba(12,10,20,.5); display: flex; align-items: flex-end; justify-content: center;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); animation: fade .15s ease-out; }
+@media (min-width: 600px) { .overlay { align-items: center; } }
+@keyframes fade { from { opacity: 0; } }
+.sheet { width: 100%; max-width: 440px; background: var(--surface); border-radius: 20px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; max-height: 86vh; overflow-y: auto; animation: rise .2s ease-out; }
+@keyframes rise { from { transform: translateY(16px); opacity: .6; } }
+.sheet h3 { font-family: var(--font-display); font-weight: 800; font-size: 26px; margin: 0; letter-spacing: -.015em; }
+.sheet h4 { margin: 4px 0 0; font-size: 15px; }
+.sheet p, .sheet li { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+.sheet ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.kicker { color: var(--accent); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.result-grid div { background: var(--well); border-radius: 12px; padding: 10px 4px; display: flex; flex-direction: column; gap: 2px; }
+.result-grid b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.result-grid span { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="layer"></div>
+<script>
+"use strict";
+/* =====================================================================
+   Rising Blocks: swap neighbouring blocks to line up 3 or more of a kind
+   before the rising stack reaches the top. Clear several at once for a
+   combo; let falling blocks make new matches for a chain.
+
+   Sections:
+     1. Small helpers (shared with Sudoku)
+     2. Rules: the rising stack (no drawing, so it can be tested on its own)
+     3. Running a game: timing, touch and keyboard
+     4. Drawing the blocks
+     5. Screens, sheets, Android hooks and startup
+   ===================================================================== */
+
+/* ---------- 1. Helpers ---------- */
+const store = {
+  get(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  remove(key) { try { localStorage.removeItem(key); } catch {} },
+};
+
+// A small seeded random number generator, so the daily puzzle is the same for everyone each day.
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shuffle(list, rand) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+function formatTime(totalSeconds) {
+  const s = Math.floor(totalSeconds % 60), m = Math.floor(totalSeconds / 60) % 60, h = Math.floor(totalSeconds / 3600);
+  const pad = n => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function bitCount(m) { let n = 0; while (m) { m &= m - 1; n++; } return n; }
+
+/* ---------- 2. Rules: the rising stack ----------
+   The board is 6 columns by 12 rows (row 0 is the top), plus one row waiting below
+   that you can see but not touch yet. Everything runs in fixed steps of 1/60 second,
+   so the game behaves the same on every device.
+
+   A block is { color, state, timer, chain } where state is:
+     idle     resting, can be swapped and matched
+     swap     sliding sideways for a few steps after a swap
+     hover    about to fall (a short pause before dropping)
+     fall     dropping one row per step
+     match    part of a match: flashes, then pops one block at a time, then clears
+     garbage  one cell of a garbage slab (see below); can't be swapped or matched
+
+   Versus the computer, big moves send garbage to the other board:
+     combo of 4+  ->  a slab one row tall, 3 to 6 cells wide
+     chain of xN  ->  a full-width slab N-1 rows tall, sent when the chain ends
+   A match touching a slab breaks it: its bottom row turns into normal blocks and the
+   rest drops down. Slabs touching a breaking slab break too.
+
+   The 3D cylinder board has 16 columns that wrap around: the last column sits next to
+   the first, so rows, swaps, matches and slabs all work across that seam. */
+const COLS = 6, ROWS = 12, CYLINDER_COLS = 16;
+const SWAP_TIME = 4, HOVER_TIME = 10, FLASH_TIME = 36, POP_TIME = 8;
+const GARBAGE_DELAY = 100;      // steps between a slab being sent and it dropping in
+const BURY_LIMIT = 180;         // steps a slab can wait for room before the board loses
+
+const MODES = {
+  easy:   { label: "Easy",   colors: 5, speed: 0.0030, step: 0.0006, grace: 150 },
+  normal: { label: "Normal", colors: 5, speed: 0.0050, step: 0.0009, grace: 110 },
+  hard:   { label: "Hard",   colors: 6, speed: 0.0075, step: 0.0012, grace: 80 },
+};
+const RAISE_SPEED = 0.08;       // rows per step while holding Raise (about 5 rows a second)
+const BLOCKS_PER_LEVEL = 25;    // the stack speeds up every 25 blocks cleared
+
+function newBlocksGame(modeKey, rand, timed, cylinder) {
+  const mode = MODES[modeKey];
+  const cols = cylinder ? CYLINDER_COLS : COLS;
+  const g = {
+    mode: modeKey, colors: mode.colors, timed: !!timed, timeLeft: timed ? 120 * 60 : 0,
+    cols, wrap: !!cylinder,
+    grid: Array.from({ length: ROWS }, () => new Array(cols).fill(null)),
+    next: null, rise: 0, raising: false, stop: 0, grace: mode.grace,
+    score: 0, cleared: 0, level: 1, chain: 1, chainPeak: 1, bestChain: 1, frames: 0,
+    garbage: [], incoming: [], nextGarbageId: 1, side: 0, buried: 0, sent: 0,
+    cursor: { r: 8, c: 2 }, over: false, events: [], seed: Math.floor(rand() * 1e9),
+  };
+  g.rand = seededRandom(g.seed);
+  // Start with about half a screen of blocks, no matches already made.
+  for (let r = ROWS - 1; r >= ROWS - 6; r--) {
+    for (let c = 0; c < cols; c++) {
+      if (r < ROWS - 3 && g.rand() < 0.25) continue;
+      if (r + 1 < ROWS && !g.grid[r + 1][c]) continue;   // no floating blocks
+      g.grid[r][c] = makeBlock(safeColor(g, r, c));
+    }
+  }
+  g.next = newRow(g);
+  return g;
+}
+const makeBlock = color => ({ color, state: "idle", timer: 0, chain: false, dir: 0 });
+const isBlock = b => b && b.state !== "garbage";
+// The column next to c (dir -1 or +1): wraps around on the cylinder, -1 past the edge of a flat board.
+function colStep(g, c, dir) {
+  const n = c + dir;
+  if (g.wrap) return (n + g.cols) % g.cols;
+  return n < 0 || n >= g.cols ? -1 : n;
+}
+// How many blocks of this colour sit right beside column c in a row (up to 2 each side)?
+function sameBeside(g, getRow, c, color) {
+  let n = 0;
+  for (const dir of [-1, 1]) {
+    let k = c;
+    for (let step = 0; step < 2; step++) {
+      k = colStep(g, k, dir);
+      const b = k < 0 ? null : getRow(k);
+      if (!isBlock(b) || b.color !== color) break;
+      n++;
+    }
+  }
+  return n;
+}
+
+// Pick a colour that doesn't complete three in a row with the blocks to the left or above.
+function safeColor(g, r, c) {
+  const at = (rr, cc) => { const b = g.grid[rr] && g.grid[rr][cc]; return isBlock(b) ? b : null; };
+  for (let tries = 0; tries < 20; tries++) {
+    const color = Math.floor(g.rand() * g.colors);
+    const left = sameBeside(g, k => at(r, k), c, color) >= 2;
+    const up = r >= 2 && at(r - 1, c) && at(r - 2, c) && at(r - 1, c).color === color && at(r - 2, c).color === color;
+    const down = r + 2 <= ROWS - 1 && at(r + 1, c) && at(r + 2, c) && at(r + 1, c).color === color && at(r + 2, c).color === color;
+    if (!left && !up && !down) return color;
+  }
+  return Math.floor(g.rand() * g.colors);
+}
+function newRow(g) {
+  const row = new Array(g.cols).fill(null);
+  for (let c = 0; c < g.cols; c++) {
+    for (let tries = 0; tries < 20; tries++) {
+      const color = Math.floor(g.rand() * g.colors);
+      const left = sameBeside(g, k => row[k], c, color) >= 2;
+      // Also avoid lining up with the two blocks that will sit above it.
+      const a = g.grid[ROWS - 1][c], b = g.grid[ROWS - 2][c];
+      const up = isBlock(a) && isBlock(b) && a.color === color && b.color === color;
+      if (!left && !up) { row[c] = makeBlock(color); break; }
+    }
+    if (!row[c]) row[c] = makeBlock(Math.floor(g.rand() * g.colors));
+  }
+  return row;
+}
+
+/* ---------- Player actions ---------- */
+// Can the blocks at (r, c) and the one to its right swap right now?
+function canSwap(g, r, c) {
+  const c2 = colStep(g, c, 1);
+  if (g.over || c < 0 || c >= g.cols || c2 < 0 || r < 0 || r >= ROWS) return false;
+  const a = g.grid[r][c], b = g.grid[r][c2];
+  if (!a && !b) return false;
+  for (const x of [a, b]) if (x && x.state !== "idle") return false;
+  // Not into a gap that something is about to fall into.
+  for (const cc of [c, c2]) {
+    const above = r > 0 && g.grid[r - 1][cc];
+    if (!g.grid[r][cc] && above && (above.state === "hover" || above.state === "fall")) return false;
+  }
+  return true;
+}
+function swap(g, r, c) {
+  if (!canSwap(g, r, c)) return false;
+  const c2 = colStep(g, c, 1);
+  const a = g.grid[r][c], b = g.grid[r][c2];
+  g.grid[r][c] = b; g.grid[r][c2] = a;
+  if (a) { a.state = "swap"; a.timer = SWAP_TIME; a.dir = 1; a.chain = false; }
+  if (b) { b.state = "swap"; b.timer = SWAP_TIME; b.dir = -1; b.chain = false; }
+  return true;
+}
+// Versus: garbage arriving from the other board waits a moment, then drops in.
+// w can be "full": a slab as wide as the board that receives it.
+function sendGarbage(g, w, h) {
+  for (let left = h; left > 0; left -= 4) g.incoming.push({ w, h: Math.min(4, left), timer: GARBAGE_DELAY });
+}
+
+/* ---------- Garbage slabs ---------- */
+function placeGarbage(g, piece) {
+  for (let r = piece.r; r < piece.r + piece.h; r++) for (let c = piece.c; c < piece.c + piece.w; c++) g.grid[r][c] = { state: "garbage", piece };
+}
+function liftGarbage(g, piece) {
+  for (let r = piece.r; r < piece.r + piece.h; r++) for (let c = piece.c; c < piece.c + piece.w; c++) if (g.grid[r][c] && g.grid[r][c].piece === piece) g.grid[r][c] = null;
+}
+function dropIncoming(g, anyMatch) {
+  if (!g.incoming.length) { g.buried = 0; return; }
+  const next = g.incoming[0];
+  if (next.timer > 0) { next.timer--; return; }
+  if (anyMatch) return;   // wait until the board isn't in the middle of clearing
+  const w = next.w === "full" ? g.cols : Math.min(next.w, g.cols);
+  // Narrow slabs alternate between the left and right walls.
+  const c = w === g.cols ? 0 : g.side ? g.cols - w : 0;
+  let fits = true;
+  for (let r = 0; r < next.h; r++) for (let cc = c; cc < c + w; cc++) if (g.grid[r][cc]) fits = false;
+  if (!fits) {
+    if (++g.buried > BURY_LIMIT) { g.over = true; g.events.push({ type: "gameover", buried: true }); }
+    return;
+  }
+  g.buried = 0;
+  g.side ^= 1;
+  g.incoming.shift();
+  const piece = { id: g.nextGarbageId++, r: 0, c, w, h: next.h, state: "fall", timer: 0 };
+  g.garbage.push(piece);
+  placeGarbage(g, piece);
+  g.events.push({ type: "garbage", w: piece.w, h: piece.h });
+}
+function stepGarbage(g) {
+  // Breaking slabs: when the flash ends, the bottom row becomes normal blocks.
+  for (const piece of g.garbage.slice()) {
+    if (piece.state !== "clear" || --piece.timer > 0) continue;
+    const bottom = piece.r + piece.h - 1;
+    for (let c = piece.c; c < piece.c + piece.w; c++) {
+      const b = makeBlock(Math.floor(g.rand() * g.colors));
+      b.chain = true;    // new blocks can set off a chain
+      g.grid[bottom][c] = b;
+    }
+    piece.h--;
+    if (piece.h <= 0) g.garbage.splice(g.garbage.indexOf(piece), 1);
+    else piece.state = "fall";
+  }
+  // Falling slabs drop one row per step while the whole row under them is empty.
+  for (const piece of g.garbage.slice().sort((a, b) => (b.r + b.h) - (a.r + a.h))) {
+    if (piece.state === "clear") continue;
+    const below = piece.r + piece.h;
+    let free = below < ROWS;
+    for (let c = piece.c; free && c < piece.c + piece.w; c++) if (g.grid[below][c]) free = false;
+    if (free) { liftGarbage(g, piece); piece.r++; placeGarbage(g, piece); piece.state = "fall"; }
+    else piece.state = "idle";
+  }
+}
+
+/* ---------- One step of time ---------- */
+function stepGame(g) {
+  if (g.over) return;
+  g.frames++;
+  g.events.length = 0;
+  if (g.timed) { g.timeLeft--; if (g.timeLeft <= 0) { g.timeLeft = 0; g.over = true; g.events.push({ type: "timeup" }); return; } }
+
+  // 1. Swaps finish sliding.
+  forEachBlock(g, b => { if (b.state === "swap" && --b.timer <= 0) { b.state = "idle"; b.dir = 0; } });
+
+  // 2. Matches flash, pop, then clear. Blocks resting above a cleared block will fall as part of a chain.
+  const clearing = [];
+  forEachBlock(g, (b, r, c) => { if (b.state === "match" && --b.timer <= 0) clearing.push([r, c]); });
+  for (const [r, c] of clearing) g.grid[r][c] = null;
+  for (const [r, c] of clearing) {
+    for (let rr = r - 1; rr >= 0; rr--) {
+      const above = g.grid[rr][c];
+      if (!above || above.state !== "idle") break;
+      above.chain = true;
+    }
+  }
+  stepGarbage(g);
+
+  // 3. Gravity, bottom row first. Garbage cells count as solid ground.
+  for (let r = ROWS - 2; r >= 0; r--) {
+    for (let c = 0; c < g.cols; c++) {
+      const b = g.grid[r][c];
+      if (!b || b.state === "garbage") continue;
+      const below = g.grid[r + 1][c];
+      if (b.state === "idle" && (!below || below.state === "hover")) {
+        b.state = "hover"; b.timer = below ? below.timer : HOVER_TIME;   // fall together with what's below
+      } else if (b.state === "hover") {
+        if (--b.timer <= 0) b.state = "fall";
+      }
+      if (b.state === "fall") {
+        if (!below) { g.grid[r + 1][c] = b; g.grid[r][c] = null; }
+        else if (below.state !== "fall") b.state = "idle";
+      }
+    }
+  }
+  for (let c = 0; c < g.cols; c++) { const b = g.grid[ROWS - 1][c]; if (b && (b.state === "fall" || b.state === "hover")) b.state = "idle"; }
+
+  // 4. Find new matches among resting blocks.
+  findMatches(g);
+
+  // Blocks that landed without matching are no longer part of a chain.
+  forEachBlock(g, b => { if (b.state === "idle") b.chain = false; });
+  let chainAlive = false, anyMatch = false;
+  forEachBlock(g, b => { if (b.chain) chainAlive = true; if (b.state === "match") anyMatch = true; });
+  if (g.garbage.some(p => p.state === "clear")) anyMatch = true;
+  if (!chainAlive && !anyMatch) {
+    // A chain just ended: in versus, it sends a full-width slab.
+    if (g.chainPeak > 1) { g.events.push({ type: "send", w: "full", h: g.chainPeak - 1 }); g.sent += COLS * (g.chainPeak - 1); }
+    g.chain = 1; g.chainPeak = 1;
+  }
+  dropIncoming(g, anyMatch);
+  if (g.over) return;
+
+  // 5. The stack rises, unless matches are happening or the stack is paused after a combo or chain.
+  if (g.stop > 0) g.stop--;
+  const topFull = g.grid[0].some(Boolean);
+  const busy = anyMatch || g.stop > 0 || hasMoving(g);
+  if (topFull && !busy) {
+    if (--g.grace <= 0) { g.over = true; g.events.push({ type: "gameover" }); return; }
+  } else if (!topFull) g.grace = MODES[g.mode].grace;
+  if (!busy && !topFull) {
+    const mode = MODES[g.mode];
+    g.rise += g.raising ? RAISE_SPEED : mode.speed + mode.step * (g.level - 1);
+    if (g.rise >= 1) {
+      g.rise = 0;
+      g.raising = false;
+      g.grid.shift();
+      g.grid.push(g.next);
+      g.garbage.forEach(p => p.r--);
+      g.next = newRow(g);
+      g.cursor.r = Math.max(0, g.cursor.r - 1);
+    }
+  } else if (g.raising && busy) g.raising = false;
+}
+
+function findMatches(g) {
+  const W = g.cols;
+  const ok = (r, c) => { const b = c >= 0 && g.grid[r] && g.grid[r][c]; return b && b.state === "idle" ? b : null; };
+  const hit = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < W; c++) {
+      const b = ok(r, c);
+      if (!b) continue;
+      // Along the row (around the seam on the cylinder).
+      let n = 1, k = colStep(g, c, 1);
+      while (n < W && ok(r, k) && ok(r, k).color === b.color) { n++; k = colStep(g, k, 1); }
+      if (n >= 3) for (let i = 0, cc = c; i < n; i++, cc = colStep(g, cc, 1)) hit.add(r * W + cc);
+      n = 1; while (ok(r + n, c) && ok(r + n, c).color === b.color) n++;
+      if (n >= 3) for (let i = 0; i < n; i++) hit.add((r + i) * W + c);
+    }
+  }
+  if (!hit.size) return;
+  const cells = [...hit].sort((a, b) => a - b).map(k => [Math.floor(k / W), k % W]);
+  const isChain = cells.some(([r, c]) => g.grid[r][c].chain);
+  if (isChain) g.chain++;
+  g.chainPeak = Math.max(g.chainPeak, g.chain);
+  g.bestChain = Math.max(g.bestChain, g.chain);
+  // Blocks pop one after another (top-left first), then all clear together.
+  const total = FLASH_TIME + POP_TIME * cells.length + 6;
+  cells.forEach(([r, c], k) => { const b = g.grid[r][c]; b.state = "match"; b.timer = total; b.popAt = total - FLASH_TIME - POP_TIME * (k + 1); b.chain = false; });
+  // Any slab touching the match breaks, along with slabs whose sides touch those.
+  const breaking = new Set();
+  const touch = (r, c) => { const x = c >= 0 && g.grid[r] && g.grid[r][c]; if (x && x.state === "garbage" && x.piece.state !== "clear") breaking.add(x.piece); };
+  for (const [r, c] of cells) { touch(r - 1, c); touch(r + 1, c); touch(r, colStep(g, c, -1)); touch(r, colStep(g, c, 1)); }
+  const sidesTouch = (p, q) => {
+    const rowsOverlap = p.r < q.r + q.h && q.r < p.r + p.h, colsOverlap = p.c < q.c + q.w && q.c < p.c + p.w;
+    const besides = p.c === q.c + q.w || q.c === p.c + p.w ||
+      (g.wrap && ((p.c === 0 && q.c + q.w === g.cols) || (q.c === 0 && p.c + p.w === g.cols)));   // across the seam
+    return (rowsOverlap && besides) || (colsOverlap && (p.r === q.r + q.h || q.r === p.r + p.h));
+  };
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const p of g.garbage) {
+      if (breaking.has(p) || p.state === "clear") continue;
+      if ([...breaking].some(q => sidesTouch(p, q))) { breaking.add(p); grew = true; }
+    }
+  }
+  for (const p of breaking) { p.state = "clear"; p.timer = total + 10 * p.w; }
+  // Score: 10 a block, more for combos (4+) and chains.
+  const combo = cells.length;
+  let points = combo * 10;
+  if (combo > 3) points += (combo - 3) * 20 + (combo >= 6 ? 50 : 0);
+  if (g.chain > 1) points += 50 * (g.chain - 1) * g.chain;
+  g.score += points;
+  g.cleared += combo;
+  g.level = 1 + Math.floor(g.cleared / BLOCKS_PER_LEVEL);
+  // Big moves pause the rising stack for a moment.
+  g.stop = Math.max(g.stop, (combo > 3 ? 40 + combo * 6 : 0) + (g.chain > 1 ? 60 + g.chain * 20 : 0));
+  const [r0, c0] = cells[0];
+  g.events.push({ type: "match", combo, chain: g.chain, points, r: r0, c: c0, broke: breaking.size });
+  // Combos send a slab right away: 4 -> 3 wide, 5 -> 4, 6 -> 5, 7 -> 6; 8 or more also adds a second slab.
+  if (combo >= 4) {
+    const w = Math.min(COLS, combo - 1);
+    g.events.push({ type: "send", w, h: 1 });
+    g.sent += w;
+    if (combo >= 8) { const w2 = Math.min(COLS, combo - 6); g.events.push({ type: "send", w: w2, h: 1 }); g.sent += w2; }
+  }
+}
+
+function forEachBlock(g, fn) {
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < g.cols; c++) { const b = g.grid[r][c]; if (b && b.state !== "garbage") fn(b, r, c); }
+}
+function hasMoving(g) {
+  let moving = g.garbage.some(p => p.state === "fall");
+  forEachBlock(g, b => { if (b.state === "hover" || b.state === "fall") moving = true; });
+  return moving;
+}
+// How high is the stack? (Used to warn when it's close to the top.)
+function stackHeight(g) {
+  for (let r = 0; r < ROWS; r++) if (g.grid[r].some(Boolean)) return ROWS - r;
+  return 0;
+}
+
+/* ---------- The computer player ----------
+   It looks at every block it could slide 1 to 5 columns, works out what would land
+   where, and scores the result: matches, bigger combos, and a chain if clearing that
+   match would let blocks fall into another one. Then it carries out the best move one
+   swap at a time, like a person dragging. With nothing useful to do, it flattens its
+   stack and raises it. Easy, Normal and Hard change how fast it reacts and how often
+   it picks its best idea. */
+const CPU_LEVELS = {
+  easy:   { think: 64, swapGap: 16, choices: 5, raiseBelow: 4 },
+  normal: { think: 34, swapGap: 10, choices: 3, raiseBelow: 5 },
+  hard:   { think: 11, swapGap: 5,  choices: 1, raiseBelow: 6 },
+};
+function colorGrid(g) {
+  // -1 empty, -2 something that can't move right now (garbage, falling, matching), 0+ a resting block's colour.
+  return g.grid.map(row => row.map(b => (!b ? -1 : b.state === "idle" ? b.color : -2)));
+}
+function settle(cg) {
+  for (let c = 0; c < cg[0].length; c++) {
+    for (let r = ROWS - 2; r >= 0; r--) {
+      if (cg[r][c] < 0) continue;
+      let rr = r;
+      while (rr + 1 < ROWS && cg[rr + 1][c] === -1) { cg[rr + 1][c] = cg[rr][c]; cg[rr][c] = -1; rr++; }
+    }
+  }
+}
+function matchedCells(cg, wrap) {
+  const W = cg[0].length, hit = new Set();
+  const at = (r, c) => (wrap ? cg[r][(c + W) % W] : c < W ? cg[r][c] : -1);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < W; c++) {
+    const v = cg[r][c];
+    if (v < 0) continue;
+    let n = 1; while (n < W && at(r, c + n) === v) n++;
+    if (n >= 3) for (let k = 0; k < n; k++) hit.add(r * W + (c + k) % W);
+    n = 1; while (r + n < ROWS && cg[r + n][c] === v) n++;
+    if (n >= 3) for (let k = 0; k < n; k++) hit.add((r + k) * W + c);
+  }
+  return hit;
+}
+// Score sliding the block at (r, c) `steps` columns in direction dir (null = not possible).
+function scoreMove(cg0, r, c, dir, steps, wrap) {
+  const cg = cg0.map(row => row.slice());
+  const W = cg[0].length;
+  let cc = c, used = 0;
+  for (let s = 0; s < steps; s++) {
+    const next = wrap ? (cc + dir + W) % W : cc + dir;
+    if (next < 0 || next >= W || cg[r][next] === -2 || cg[r][cc] < 0) return null;
+    [cg[r][cc], cg[r][next]] = [cg[r][next], cg[r][cc]];
+    cc = next; used++;
+    if (r + 1 < ROWS && cg[r + 1][cc] === -1) break;   // it would drop into a gap here
+  }
+  if (used < steps) return null;
+  settle(cg);
+  const first = matchedCells(cg, wrap);
+  if (!first.size) return 0;
+  let score = first.size * 10 + (first.size >= 4 ? (first.size - 3) * 35 : 0);
+  // Look one step ahead: does clearing this make falling blocks match again?
+  for (const k of first) cg[Math.floor(k / W)][k % W] = -1;
+  settle(cg);
+  const second = matchedCells(cg, wrap);
+  if (second.size) score += 60 + second.size * 15;
+  return score - steps;   // prefer shorter moves when they're as good
+}
+function cpuStep(g, level) {
+  const L = CPU_LEVELS[level];
+  const ai = g.ai || (g.ai = { wait: L.think, plan: [] });
+  if (g.over) return;
+  if (ai.wait > 0) { ai.wait--; return; }
+  if (ai.plan.length) {
+    const s = ai.plan.shift();
+    if (!swap(g, s.r, s.c)) ai.plan = [];
+    ai.wait = ai.plan.length ? L.swapGap : L.think;
+    return;
+  }
+  const cg = colorGrid(g);
+  const options = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < g.cols; c++) {
+    if (cg[r][c] < 0) continue;
+    for (const dir of [-1, 1]) for (let steps = 1; steps <= 5; steps++) {
+      const sc = scoreMove(cg, r, c, dir, steps, g.wrap);
+      if (sc === null) break;
+      if (sc > 0) options.push({ r, c, dir, steps, sc });
+    }
+  }
+  options.sort((a, b) => b.sc - a.sc);
+  if (options.length) {
+    const pick = options[Math.floor(g.rand() * Math.min(L.choices, options.length))];
+    ai.plan = [];
+    // Each step swaps the moving block with its neighbour; a swap is named by its left column.
+    for (let s = 0, cc = pick.c; s < pick.steps; s++, cc = colStep(g, cc, pick.dir)) ai.plan.push({ r: pick.r, c: pick.dir > 0 ? cc : colStep(g, cc, -1) });
+    ai.wait = 0;
+    return;
+  }
+  // Nothing to match: flatten a tall column into a lower neighbour, or raise a low stack.
+  const tops = [];
+  for (let c = 0; c < g.cols; c++) { let t = ROWS; for (let r = 0; r < ROWS; r++) if (g.grid[r][c]) { t = r; break; } tops.push(t); }
+  let flatten = null;
+  for (let c = 0; c < g.cols; c++) for (const dir of [-1, 1]) {
+    const n = colStep(g, c, dir);
+    if (n < 0 || tops[c] >= ROWS) continue;
+    const leftCol = dir > 0 ? c : n;
+    if (tops[n] - tops[c] >= 2 && canSwap(g, tops[c], leftCol) && (!flatten || tops[n] - tops[c] > flatten.gap)) flatten = { r: tops[c], c: leftCol, gap: tops[n] - tops[c] };
+  }
+  if (flatten) swap(g, flatten.r, flatten.c);
+  else if (stackHeight(g) < L.raiseBelow) g.raising = true;
+  ai.wait = L.think;
+}
+
+/* ---------- 3. Running a game ---------- */
+let game = null;
+let cpu = null;           // the computer's board in a versus game
+let paused = false;
+let bests = store.get("qb-best", {});
+let choice = Object.assign({ mode: "normal", game: "endless", board: "flat" }, store.get("qb-choice", {}));
+if (choice.rush !== undefined) { choice.game = choice.rush ? "rush" : "endless"; delete choice.rush; }   // older saved choice
+let rafId = null, lastTime = 0, acc = 0;
+let popups = [];          // floating "x2" / "4" badges
+let shake = 0;
+const STEP = 1000 / 60;
+const bestKey = () => `${game.timed ? "rush" : "endless"}-${game.mode}${game.wrap ? "-3d" : ""}`;
+const vsKey = (mode, cyl, result) => `vs-${mode}${cyl ? "-3d" : ""}-${result}`;
+// Cylinder view: which column is at the front (continuous, in columns), and where it's turning to.
+const view = { pos: 8, target: 8, edge: 0 };
+const wrapDiff = (d, n) => ((d % n) + n * 1.5) % n - n / 2;   // shortest signed distance around n columns
+const CPU_NAME = "Ada";
+
+function startGame() {
+  const cyl = choice.board === "cylinder";
+  game = newBlocksGame(choice.mode, Math.random, choice.game === "rush", cyl);
+  cpu = choice.game === "vs" ? newBlocksGame(choice.mode, Math.random, false, cyl) : null;
+  view.pos = view.target = 8; view.edge = 0;
+  paused = false; popups = []; acc = 0; lastTime = 0;
+  showGameScreen();
+  loop(performance.now());
+}
+
+function loop(now) {
+  cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(loop);
+  if (!lastTime) lastTime = now;
+  const dt = Math.min(100, now - lastTime);
+  lastTime = now;
+  const running = game && !game.over && !paused && !document.hidden && !layer.childElementCount;
+  if (running) {
+    acc += dt;
+    let steps = 0;
+    while (acc >= STEP && steps < 6) {
+      if (raiseHeld) game.raising = true;
+      stepGame(game);
+      for (const e of game.events) onEvent(e);
+      if (cpu) {
+        cpuStep(cpu, game.mode);
+        stepGame(cpu);
+        // Big moves on either board send garbage to the other one.
+        for (const e of game.events) if (e.type === "send") sendGarbage(cpu, e.w, e.h);
+        for (const e of cpu.events) if (e.type === "send") sendGarbage(game, e.w, e.h);
+        if (cpu.over && !game.over) game.over = true, game.won = true;
+      }
+      acc -= STEP; steps++;
+      if (game.over) { if (cpu) cpu.over = true; setTimeout(openGameOver, 500); break; }
+    }
+  } else acc = 0;
+  if (game && game.wrap) {
+    // Turn smoothly toward the target column; keep turning while a dragged block is held at the edge.
+    if (held && view.edge && running) { view.target += view.edge * 0.07; followFinger(); }
+    const d = wrapDiff(view.target - view.pos, game.cols);
+    view.pos = Math.abs(d) < 0.002 ? view.target : view.pos + d * 0.25;
+  }
+  draw(now);
+  updateHud();
+}
+
+function onEvent(e) {
+  if (e.type === "garbage") shake = Math.max(shake, 5);
+  if (e.type !== "match") return;
+  const text = e.chain > 1 ? `×${e.chain}` : e.combo > 3 ? `${e.combo}` : "";
+  if (text) popups.push({ text, chain: e.chain > 1, r: e.r, c: e.c, age: 0 });
+  if (e.chain > 2 || e.combo > 5) shake = 8;
+}
+
+/* Touch and mouse: press on a block and drag sideways to swap it with its neighbours.
+   On the cylinder, dragging a block to the edge turns the cylinder to follow it, and
+   dragging anywhere else (empty space or garbage) spins the cylinder. */
+let held = null;      // { r, c } of the block being moved
+let spin = null;      // { x, pos } while spinning the cylinder by hand
+let fingerX = 0;      // last finger position over the board, so a held block can keep following it
+let raiseHeld = false;
+function columnAt(x) {
+  if (!game.wrap) return Math.floor(x / cell);
+  const R = W / 2, a = Math.asin(Math.max(-1, Math.min(1, (x - W / 2) / R)));
+  const k = Math.floor(view.pos + a / (2 * Math.PI / game.cols));
+  return ((k % game.cols) + game.cols) % game.cols;
+}
+function cellAt(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  return { r: Math.floor(y / cell + game.rise), c: columnAt(x), x };
+}
+function onDown(e) {
+  if (!game || game.over || paused) return;
+  const { r, c } = cellAt(e);
+  canvas.setPointerCapture(e.pointerId);
+  const b = r >= 0 && r < ROWS && c >= 0 && c < game.cols ? game.grid[r][c] : null;
+  if (b && b.state !== "garbage") {
+    game.cursor = { r, c: game.wrap ? c : Math.min(c, game.cols - 2) };
+    held = { r, c };
+    fingerX = cellAt(e).x;
+  } else if (game.wrap) {
+    spin = { x: e.clientX, pos: view.pos };
+  }
+}
+function onMove(e) {
+  if (!game || game.over || paused) return;
+  if (spin) {
+    view.pos = view.target = spin.pos - (e.clientX - spin.x) / (W / 2 * 2 * Math.PI / game.cols);
+    return;
+  }
+  if (!held) return;
+  const { x } = cellAt(e);
+  fingerX = x;
+  if (game.wrap) {
+    const rel = (x - W / 2) / (W / 2);
+    view.edge = rel > .78 ? 1 : rel < -.78 ? -1 : 0;
+  }
+  followFinger();
+}
+// Move the held block one column at a time toward the column under the finger, swapping as
+// it goes. Also called every frame while the cylinder turns under a finger held at the edge.
+function followFinger() {
+  if (!held || !game || game.over) return;
+  const c = columnAt(fingerX);
+  for (let guard = 0; held && guard < game.cols; guard++) {
+    const diff = game.wrap ? Math.round(wrapDiff(c - held.c, game.cols)) : c - held.c;
+    if (!diff) break;
+    const dir = diff > 0 ? 1 : -1;
+    const left = dir > 0 ? held.c : colStep(game, held.c, -1);
+    if (left < 0 || !swap(game, held.r, left)) break;
+    held.c = colStep(game, held.c, dir);
+  }
+}
+function onUp() {
+  held = null;
+  view.edge = 0;
+  if (spin) { spin = null; view.target = Math.round(view.pos); }   // settle on a column
+}
+function turn(dir) { if (game && game.wrap) view.target = Math.round(view.target) + dir; }
+
+document.addEventListener("keydown", e => {
+  if (layer.childElementCount) { if (e.key === "Escape" && document.getElementById("overlay")?.dataset.dismissable) closeSheet(); return; }
+  if (!game || game.over || !document.getElementById("well")) return;
+  const k = e.key;
+  if (k === "p" || k === "P" || k === "Escape") { togglePause(); return; }
+  if (paused) return;
+  const cur = game.cursor;
+  if (k === "ArrowLeft") cur.c = game.wrap ? colStep(game, cur.c, -1) : Math.max(0, cur.c - 1);
+  else if (k === "ArrowRight") cur.c = game.wrap ? colStep(game, cur.c, 1) : Math.min(game.cols - 2, cur.c + 1);
+  else if (k === "q" || k === "Q") turn(-1);
+  else if (k === "e" || k === "E") turn(1);
+  else if (k === "ArrowUp") cur.r = Math.max(0, cur.r - 1);
+  else if (k === "ArrowDown") cur.r = Math.min(ROWS - 1, cur.r + 1);
+  else if (k === " " || k === "x" || k === "X" || k === "Enter") swap(game, cur.r, cur.c);
+  else if (k === "z" || k === "Z" || k === "Shift") game.raising = true;
+  else return;
+  // Keep the cursor on the front of the cylinder.
+  if (game.wrap && Math.abs(wrapDiff(cur.c + 1 - view.target, game.cols)) > 2) view.target = cur.c + 1;
+  e.preventDefault();
+});
+
+function togglePause(force) {
+  if (!game || game.over) return;
+  paused = typeof force === "boolean" ? force : !paused;
+  held = null;
+  document.getElementById("cover").hidden = !paused;
+  document.getElementById("pause").innerHTML = paused ? ICONS.play : ICONS.pause;
+}
+
+/* ---------- 4. Drawing ---------- */
+// Six block kinds: each has its own colour and its own shape, so colour isn't the only clue.
+const KINDS = [
+  { fill: "#E0533D", shape: "circle" }, { fill: "#E39A12", shape: "triangle" }, { fill: "#2FA05A", shape: "square" },
+  { fill: "#2C8FD6", shape: "diamond" }, { fill: "#8A5CD6", shape: "star" }, { fill: "#D9478F", shape: "hex" },
+];
+let canvas, ctx, cell = 40, W = 240, H = 480, dpr = 1;
+let cpuView = null;      // { canvas, ctx, cell, W, H } for the computer's small board
+
+function fitCanvas() {
+  const wrap = document.getElementById("well");
+  if (!wrap) return;
+  const side = cpu ? 92 + 10 : 0;
+  // A cylinder shows its front half: 16 columns around means about 5 columns across, and
+  // sizing it this way keeps the blocks facing you square.
+  const across = game.wrap ? game.cols / Math.PI : COLS;
+  cell = Math.floor(Math.min((wrap.clientWidth - side) / across, wrap.clientHeight / ROWS));
+  W = Math.round(cell * across); H = cell * ROWS;
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  if (cpu) {
+    const c2 = document.getElementById("cpu-board");
+    const small = Math.floor(92 / COLS);
+    cpuView = { canvas: c2, ctx: c2.getContext("2d"), cell: small, W: small * COLS, H: small * ROWS };
+    c2.width = cpuView.W * dpr; c2.height = cpuView.H * dpr;
+    c2.style.width = cpuView.W + "px"; c2.style.height = cpuView.H + "px";
+  }
+}
+
+function shapePath(shape, x, y, s) {
+  ctx.beginPath();
+  if (shape === "circle") ctx.arc(x, y, s * .5, 0, Math.PI * 2);
+  else if (shape === "square") ctx.rect(x - s * .42, y - s * .42, s * .84, s * .84);
+  else if (shape === "triangle") { ctx.moveTo(x, y - s * .55); ctx.lineTo(x + s * .55, y + s * .45); ctx.lineTo(x - s * .55, y + s * .45); ctx.closePath(); }
+  else if (shape === "diamond") { ctx.moveTo(x, y - s * .6); ctx.lineTo(x + s * .55, y); ctx.lineTo(x, y + s * .6); ctx.lineTo(x - s * .55, y); ctx.closePath(); }
+  else if (shape === "star") {
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? s * .26 : s * .6; ctx[k ? "lineTo" : "moveTo"](x + rr * Math.cos(a), y + rr * Math.sin(a)); }
+    ctx.closePath();
+  } else if (shape === "hex") {
+    for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; ctx[k ? "lineTo" : "moveTo"](x + s * .52 * Math.cos(a), y + s * .52 * Math.sin(a)); }
+    ctx.closePath();
+  }
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawBlock(b, x, y, alpha, flash) {
+  const kind = KINDS[b.color], pad = cell * .06, s = cell - pad * 2;
+  ctx.globalAlpha = alpha;
+  roundRect(x + pad, y + pad, s, s, cell * .18);
+  ctx.fillStyle = kind.fill; ctx.fill();
+  // A soft highlight on the top half gives the blocks some depth.
+  const grad = ctx.createLinearGradient(0, y + pad, 0, y + pad + s);
+  grad.addColorStop(0, "rgba(255,255,255,.28)"); grad.addColorStop(.55, "rgba(255,255,255,0)"); grad.addColorStop(1, "rgba(0,0,0,.12)");
+  ctx.fillStyle = grad; ctx.fill();
+  if (flash) { ctx.fillStyle = "rgba(255,255,255,.65)"; ctx.fill(); }
+  shapePath(kind.shape, x + cell / 2, y + cell / 2, cell * .42);
+  ctx.fillStyle = flash ? kind.fill : "rgba(255,255,255,.92)"; ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function draw(now) {
+  if (!ctx || !game) return;
+  drawBoard(game, now, true);
+  if (cpu && cpuView) {
+    // Draw the computer's board with the same code, at its own small size.
+    const saved = { ctx, cell, W, H };
+    ({ ctx, cell, W, H } = cpuView);
+    drawBoard(cpu, now, false);
+    ({ ctx, cell, W, H } = saved);
+  }
+}
+// Where column kf (can be fractional, mid-swap) sits on screen: { x0, x1, shade } or null if
+// it's round the back of the cylinder. Flat boards are a simple strip of equal columns.
+function columnRect(g, kf, curved) {
+  if (!curved) { const cw = W / g.cols; return { x0: kf * cw, x1: (kf + 1) * cw, shade: 1 }; }
+  const step = 2 * Math.PI / g.cols, R = W / 2;
+  let mid = (kf + 0.5 - view.pos) * step;
+  mid = ((mid + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  const a0 = mid - step / 2, a1 = mid + step / 2;
+  if (a1 <= -Math.PI / 2 || a0 >= Math.PI / 2) return null;
+  return { x0: R + R * Math.sin(Math.max(a0, -Math.PI / 2)), x1: R + R * Math.sin(Math.min(a1, Math.PI / 2)), shade: Math.cos(mid) };
+}
+// Draw a block stretched to any width (cylinder columns narrow toward the edges), then shade it.
+function drawBlockAt(b, x, w, y, alpha, flash, shade) {
+  if (w < 1) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(w / cell, 1);
+  drawBlock(b, 0, 0, alpha, flash);
+  ctx.restore();
+  if (shade < .999) {
+    const pad = cell * .06;
+    roundRect(x + pad * w / cell, y + pad, w - 2 * pad * w / cell, cell - pad * 2, Math.min(cell * .18, w / 3));
+    ctx.fillStyle = `rgba(10,8,20,${((1 - shade) * .6 * alpha).toFixed(3)})`; ctx.fill();
+  }
+}
+function drawGarbageCurved(g, off) {
+  for (const p of g.garbage) {
+    const flashing = p.state === "clear" && Math.floor(g.frames / 4) % 2 === 0;
+    const y = p.r * cell - off, pad = cell * .06, h = p.h * cell - pad * 2;
+    for (let c = p.c; c < p.c + p.w; c++) {
+      const rc = columnRect(g, c, true);
+      if (!rc) continue;
+      const x0 = rc.x0 + (c === p.c ? pad : 0), x1 = rc.x1 - (c === p.c + p.w - 1 ? pad : 0);
+      ctx.fillStyle = flashing ? "#FFFFFF" : "#8E879E"; ctx.fillRect(x0, y + pad, x1 - x0 + .5, h);
+      ctx.fillStyle = `rgba(255,255,255,${c % 2 ? .1 : 0})`; ctx.fillRect(x0, y + pad, x1 - x0, h);
+      if (rc.shade < .999) { ctx.fillStyle = `rgba(10,8,20,${((1 - rc.shade) * .6).toFixed(3)})`; ctx.fillRect(x0, y + pad, x1 - x0 + .5, h); }
+      ctx.strokeStyle = "rgba(0,0,0,.3)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x0, y + pad); ctx.lineTo(x1, y + pad); ctx.moveTo(x0, y + pad + h); ctx.lineTo(x1, y + pad + h);
+      if (c === p.c) { ctx.moveTo(x0, y + pad); ctx.lineTo(x0, y + pad + h); }
+      if (c === p.c + p.w - 1) { ctx.moveTo(x1, y + pad); ctx.lineTo(x1, y + pad + h); }
+      ctx.stroke();
+    }
+  }
+}
+function drawGarbage(g, off, now) {
+  const cw = W / g.cols;
+  for (const p of g.garbage) {
+    const x = p.c * cw, y = p.r * cell - off, pad = cell * .06;
+    roundRect(x + pad, y + pad, p.w * cw - pad * 2, p.h * cell - pad * 2, Math.min(cell, cw) * .18);
+    const flashing = p.state === "clear" && Math.floor(g.frames / 4) % 2 === 0;
+    ctx.fillStyle = flashing ? "#FFFFFF" : "#8E879E"; ctx.fill();
+    ctx.save(); ctx.clip();
+    // Diagonal stripes so slabs never look like ordinary blocks.
+    ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = cell * .14;
+    for (let k = -p.h * 2; k < p.w * 2 + p.h; k++) { ctx.beginPath(); ctx.moveTo(x + k * cell * .7, y + p.h * cell); ctx.lineTo(x + (k + p.h) * cell * .7, y); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = Math.max(1, cell * .05);
+    roundRect(x + pad, y + pad, p.w * cw - pad * 2, p.h * cell - pad * 2, Math.min(cell, cw) * .18); ctx.stroke();
+  }
+}
+function drawBoard(game, now, isPlayer) {
+  const css = getComputedStyle(document.documentElement);
+  const curved = isPlayer && game.wrap;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const off = game.rise * cell;
+  const sx = isPlayer && shake > 0 ? (Math.random() - .5) * shake : 0;
+  if (isPlayer && shake > 0) shake *= .85, shake < .5 && (shake = 0);
+  ctx.save();
+  ctx.translate(sx, 0);
+  if (curved) {
+    // Darker toward the sides, so the board reads as a cylinder.
+    const shadeBg = ctx.createLinearGradient(0, 0, W, 0);
+    shadeBg.addColorStop(0, "rgba(10,8,20,.28)"); shadeBg.addColorStop(.5, "rgba(10,8,20,0)"); shadeBg.addColorStop(1, "rgba(10,8,20,.28)");
+    ctx.fillStyle = shadeBg; ctx.fillRect(0, 0, W, H);
+  }
+  // Columns close to the top get a warning tint.
+  const tops = [];
+  for (let c = 0; c < game.cols; c++) {
+    let top = ROWS;
+    for (let r = 0; r < ROWS; r++) if (game.grid[r][c]) { top = r; break; }
+    tops.push(top);
+    const rc = top <= 2 && columnRect(game, c, curved);
+    if (rc) {
+      ctx.fillStyle = css.getPropertyValue("--danger").trim();
+      ctx.globalAlpha = top === 0 ? .28 : .14;
+      ctx.fillRect(rc.x0, 0, rc.x1 - rc.x0, H);
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Blocks
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < game.cols; c++) {
+      const b = game.grid[r][c];
+      if (!b || b.state === "garbage") continue;   // slabs are drawn separately
+      const kf = b.state === "swap" ? c - b.dir * (b.timer / SWAP_TIME) : c;
+      const rc = columnRect(game, kf, curved);
+      if (!rc) continue;
+      let y = r * cell - off;
+      if (tops[c] <= 1 && b.state === "idle") y += Math.sin(now / 70 + c) * cell * .04;   // nervous wobble near the top
+      if (b.state === "match") {
+        if (b.timer <= b.popAt) continue;                        // already popped
+        drawBlockAt(b, rc.x0, rc.x1 - rc.x0, y, 1, Math.floor(game.frames / 4) % 2 === 0, rc.shade);
+      } else drawBlockAt(b, rc.x0, rc.x1 - rc.x0, y, 1, false, rc.shade);
+    }
+  }
+  if (curved) drawGarbageCurved(game, off); else drawGarbage(game, off, now);
+  // The next row, peeking in from the bottom, dimmed until it arrives.
+  for (let c = 0; c < game.cols; c++) {
+    const rc = columnRect(game, c, curved);
+    if (rc) drawBlockAt(game.next[c], rc.x0, rc.x1 - rc.x0, ROWS * cell - off, .35, false, rc.shade);
+  }
+  // Keyboard cursor
+  if (isPlayer && game.cursor && !held && matchMedia("(hover: hover)").matches) {
+    const { r, c } = game.cursor;
+    const a = columnRect(game, c, curved), b2 = columnRect(game, colStep(game, c, 1), curved);
+    if (a && b2) {
+      ctx.strokeStyle = css.getPropertyValue("--ink").trim(); ctx.lineWidth = 3;
+      roundRect(a.x0 + 1.5, r * cell - off + 1.5, b2.x1 - a.x0 - 3, cell - 3, cell * .2); ctx.stroke();
+    }
+  }
+  ctx.restore();
+  if (!isPlayer) return;
+  // Combo and chain badges float up and fade.
+  popups = popups.filter(p => p.age < 70);
+  for (const p of popups) {
+    p.age++;
+    const rc = columnRect(game, p.c, curved);
+    if (!rc) continue;
+    const x = (rc.x0 + rc.x1) / 2, y = p.r * cell - off - p.age * .6;
+    ctx.globalAlpha = Math.min(1, (70 - p.age) / 20);
+    ctx.font = `700 ${Math.round(cell * .5)}px Lexend, sans-serif`;
+    const w = ctx.measureText(p.text).width + cell * .4;
+    roundRect(x - w / 2, y - cell * .4, w, cell * .8, cell * .25);
+    ctx.fillStyle = p.chain ? "#FFD34D" : "#FFFFFF"; ctx.fill();
+    ctx.fillStyle = "#1D1A2B"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(p.text, x, y + 1);
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ---------- 5. Screens, sheets, Android hooks, startup ---------- */
+const ICONS = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.2-6.5a1 1 0 0 0 0-1.7L9.5 4.6A1 1 0 0 0 8 5.5z"/></svg>',
+};
+const app = document.getElementById("app");
+const layer = document.getElementById("layer");
+
+function showStart() {
+  cancelAnimationFrame(rafId);
+  game = null; cpu = null; ctx = null;
+  const sfx = choice.board === "cylinder" ? "-3d" : "";
+  const best = k => bests[k + sfx] ? bests[k + sfx].toLocaleString() : "–";
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="home" aria-label="Back to all games">${ICONS.back}</button><h1></h1><button class="icon-btn" id="help" aria-label="How to play">?</button></div>
+    <div class="start">
+      <h2>Rising Blocks</h2>
+      <p>Swap side-by-side blocks to line up three or more of a kind. Keep the stack from reaching the top. Clear several at once for a combo, or let falling blocks make new matches for a chain.</p>
+      <canvas class="demo" id="demo" width="0" height="0" aria-hidden="true"></canvas>
+      <div><div class="label">Game</div><div class="seg">
+        ${[["endless", "Endless"], ["rush", "2-minute rush"], ["vs", "Vs computer"]].map(([k, l]) => `<button class="${choice.game === k ? "on" : ""}" data-game="${k}">${l}</button>`).join("")}</div></div>
+      <p style="font-size:14px">${choice.game === "vs" ? `Play against ${CPU_NAME}. Combos and chains drop garbage on the other board. First stack to reach the top loses.` : choice.game === "rush" ? "Score as much as you can in two minutes." : "Keep going as long as you can. The stack speeds up as you clear blocks."}</p>
+      <div><div class="label">Board</div><div class="seg" style="--n:2">
+        <button class="${choice.board !== "cylinder" ? "on" : ""}" data-board="flat">Flat</button><button class="${choice.board === "cylinder" ? "on" : ""}" data-board="cylinder">3D cylinder</button></div></div>
+      <div><div class="label">${choice.game === "vs" ? `${CPU_NAME}'s strength and speed` : "Speed"}</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${k === choice.mode ? "on" : ""}" data-mode="${k}">${m.label}</button>`).join("")}</div></div>
+      <button class="btn primary" id="play">Play</button>
+      <p class="bests">${choice.game === "vs"
+        ? `Against ${CPU_NAME}${sfx ? " on the cylinder" : ""} · ${Object.entries(MODES).map(([k, m]) => `${m.label}: <b>${bests[vsKey(k, sfx, "won")] || 0}</b> won, <b>${bests[vsKey(k, sfx, "lost")] || 0}</b> lost`).join(" · ")}`
+        : `Best scores${sfx ? " on the cylinder" : ""} (Easy / Normal / Hard) · Endless: <b>${best("endless-easy")}</b> / <b>${best("endless-normal")}</b> / <b>${best("endless-hard")}</b> · Rush: <b>${best("rush-easy")}</b> / <b>${best("rush-normal")}</b> / <b>${best("rush-hard")}</b>`}</p>
+    </div>`;
+  document.getElementById("home").onclick = () => { location.href = "index.html"; };
+  document.getElementById("help").onclick = openHelp;
+  app.querySelectorAll("[data-game]").forEach(b => (b.onclick = () => { choice.game = b.dataset.game; store.set("qb-choice", choice); showStart(); }));
+  app.querySelectorAll("[data-board]").forEach(b => (b.onclick = () => { choice.board = b.dataset.board; store.set("qb-choice", choice); showStart(); }));
+  app.querySelectorAll("[data-mode]").forEach(b => (b.onclick = () => { choice.mode = b.dataset.mode; store.set("qb-choice", choice); showStart(); }));
+  document.getElementById("play").onclick = startGame;
+  drawDemo();
+}
+// A little row of the six blocks on the start screen.
+function drawDemo() {
+  const demo = document.getElementById("demo");
+  cell = 44; dpr = window.devicePixelRatio || 1;
+  demo.width = cell * 6 * dpr; demo.height = cell * dpr;
+  demo.style.width = cell * 6 + "px"; demo.style.height = cell + "px";
+  demo.style.background = "transparent"; demo.style.boxShadow = "none";
+  ctx = demo.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  KINDS.forEach((k, i) => drawBlock({ color: i }, i * cell, 0, 1, false));
+  ctx = null;
+}
+
+function showGameScreen() {
+  closeSheet();
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="home" aria-label="Back">${ICONS.back}</button><h1>Rising Blocks</h1><button class="icon-btn" id="pause" aria-label="Pause">${ICONS.pause}</button></div>
+    <div class="hud">
+      <div><span class="k">Score</span><span class="v" id="score">0</span></div>
+      <div><span class="k" id="tlabel">${game.timed ? "Time left" : "Time"}</span><span class="v" id="time">0:00</span></div>
+      <div><span class="k">Speed</span><span class="v" id="level">1</span></div>
+    </div>
+    <div class="well-wrap ${cpu ? "vs" : ""}" id="well">
+      <canvas id="board" aria-label="Your board"></canvas>
+      ${cpu ? `<div class="side">
+        <div class="who">${CPU_NAME}<small id="cpu-score">0</small></div>
+        <canvas id="cpu-board" aria-label="${CPU_NAME}'s board"></canvas>
+        <div><div class="label">To ${CPU_NAME}</div><div class="chips" id="to-cpu"></div></div>
+        <div><div class="label">To you</div><div class="chips" id="to-you"></div></div>
+      </div>` : ""}
+      <div class="paused-cover" id="cover" hidden><button id="resume" aria-label="Resume">${ICONS.play}</button></div>
+    </div>
+    <div class="controls ${game.wrap ? "turning" : ""}">
+      ${game.wrap ? `<button class="btn" id="turn-left" aria-label="Turn the cylinder left">◀</button>` : ""}
+      <button class="btn" id="raise">Raise<small>Hold to push the stack up</small></button>
+      ${game.wrap ? `<button class="btn" id="turn-right" aria-label="Turn the cylinder right">▶</button>` : ""}
+      <button class="btn" id="help" aria-label="How to play">?</button>
+    </div>`;
+  canvas = document.getElementById("board");
+  ctx = canvas.getContext("2d");
+  fitCanvas();
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointermove", onMove);
+  canvas.addEventListener("pointerup", onUp);
+  canvas.addEventListener("pointercancel", onUp);
+  const raise = document.getElementById("raise");
+  const press = on => e => { raiseHeld = on; raise.classList.toggle("down", on); if (on) raise.setPointerCapture?.(e.pointerId); };
+  raise.addEventListener("pointerdown", press(true));
+  raise.addEventListener("pointerup", press(false));
+  raise.addEventListener("pointercancel", press(false));
+  raise.addEventListener("pointerleave", press(false));
+  document.getElementById("home").onclick = () => { togglePause(true); confirmQuit(); };
+  document.getElementById("turn-left")?.addEventListener("click", () => turn(-1));
+  document.getElementById("turn-right")?.addEventListener("click", () => turn(1));
+  document.getElementById("pause").onclick = () => togglePause();
+  document.getElementById("resume").onclick = () => togglePause(false);
+  document.getElementById("help").onclick = () => { togglePause(true); openHelp(); };
+}
+
+function updateHud() {
+  if (!game || !document.getElementById("score")) return;
+  document.getElementById("score").textContent = game.score.toLocaleString();
+  const secs = Math.ceil((game.timed ? game.timeLeft : game.frames) / 60);
+  const t = document.getElementById("time");
+  t.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+  t.classList.toggle("low", game.timed && secs <= 15);
+  document.getElementById("level").textContent = game.level;
+  if (cpu) {
+    document.getElementById("cpu-score").textContent = cpu.score.toLocaleString();
+    // Garbage on its way, e.g. "6×2". Red when it's about to drop.
+    const chips = g => g.incoming.length
+      ? g.incoming.map(i => `<span class="chip ${i.timer < 40 ? "soon" : ""}">${i.w === "full" ? "row" : i.w}${i.h > 1 ? "×" + i.h : ""}</span>`).join("")
+      : `<span class="none">none</span>`;
+    const a = chips(cpu), b = chips(game);
+    const toCpu = document.getElementById("to-cpu"), toYou = document.getElementById("to-you");
+    if (toCpu.innerHTML !== a) toCpu.innerHTML = a;
+    if (toYou.innerHTML !== b) toYou.innerHTML = b;
+  }
+}
+
+function openSheet(html, onReady, dismissable = true) {
+  layer.innerHTML = `<div class="overlay" id="overlay"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const overlay = document.getElementById("overlay");
+  if (dismissable) overlay.addEventListener("click", e => { if (e.target === overlay) closeSheet(); });
+  overlay.dataset.dismissable = dismissable ? "1" : "";
+  if (onReady) onReady(overlay);
+}
+function closeSheet() { layer.innerHTML = ""; }
+
+function confirmQuit() {
+  openSheet(`<h3>Leave this game?</h3><p>Your score so far is ${game.score.toLocaleString()}. Games can't be continued later.</p>
+    <button class="btn primary" id="stay">Keep playing</button><button class="btn" id="quit">Leave</button>`, o => {
+      o.querySelector("#stay").onclick = () => { closeSheet(); };
+      o.querySelector("#quit").onclick = () => { closeSheet(); showStart(); };
+    });
+}
+
+function openGameOver() {
+  if (!game || layer.childElementCount) return;
+  if (cpu) return openVsResult();
+  const key = bestKey();
+  const isBest = game.score > (bests[key] || 0);
+  if (isBest) { bests[key] = game.score; store.set("qb-best", bests); }
+  const secs = Math.floor(game.frames / 60);
+  openSheet(`<span class="kicker">${game.timed ? "Time's up" : "Game over"}</span>
+    <h3>${isBest && game.score ? "New best score!" : game.score.toLocaleString() + " points"}</h3>
+    <div class="result-grid">
+      <div><b>${game.score.toLocaleString()}</b><span>Score</span></div>
+      <div><b>×${game.bestChain}</b><span>Best chain</span></div>
+      <div><b>${game.cleared}</b><span>Blocks</span></div>
+    </div>
+    <p>${MODES[game.mode].label} ${game.timed ? "2-minute rush" : `endless · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · reached speed ${game.level}`} · best ${bests[key].toLocaleString()}</p>
+    <button class="btn primary" id="again">Play again</button><button class="btn" id="menu">Menu</button>`, o => {
+      o.querySelector("#again").onclick = () => { closeSheet(); startGame(); };
+      o.querySelector("#menu").onclick = () => { closeSheet(); showStart(); };
+    }, false);
+}
+
+function openVsResult() {
+  const won = !!game.won;
+  const key = vsKey(game.mode, game.wrap, won ? "won" : "lost");
+  bests[key] = (bests[key] || 0) + 1;
+  store.set("qb-best", bests);
+  const secs = Math.floor(game.frames / 60);
+  openSheet(`<span class="kicker">${won ? "You win" : `${CPU_NAME} wins`}</span>
+    <h3>${won ? `${CPU_NAME}'s stack hit the top!` : game.buried > BURY_LIMIT ? "Buried by garbage." : "Your stack hit the top."}</h3>
+    <div class="result-grid">
+      <div><b>${game.sent}</b><span>Garbage sent</span></div>
+      <div><b>×${game.bestChain}</b><span>Best chain</span></div>
+      <div><b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}</b><span>Time</span></div>
+    </div>
+    <p>${MODES[game.mode].label}${game.wrap ? " on the cylinder" : ""} · your record: ${bests[vsKey(game.mode, game.wrap, "won")] || 0} won, ${bests[vsKey(game.mode, game.wrap, "lost")] || 0} lost</p>
+    <button class="btn primary" id="again">Rematch</button><button class="btn" id="menu">Menu</button>`, o => {
+      o.querySelector("#again").onclick = () => { closeSheet(); startGame(); };
+      o.querySelector("#menu").onclick = () => { closeSheet(); showStart(); };
+    }, false);
+}
+
+function openHelp() {
+  openSheet(`<h3>How to play</h3>
+    <ul>
+      <li><b>Swap:</b> press a block and drag it left or right. Keep dragging to move it further. You can also move a block into an empty space.</li>
+      <li><b>Match</b> three or more of the same block in a row or column to clear them. The blocks above fall down.</li>
+      <li><b>Combo:</b> clear four or more at once for bonus points.</li>
+      <li><b>Chain:</b> when falling blocks land and make a new match, that's a chain (×2, ×3…). Chains score the most.</li>
+      <li>Combos and chains <b>pause the stack</b> for a moment. Hold <b>Raise</b> to bring new rows up faster.</li>
+      <li>The stack speeds up as you clear blocks. If it reaches the top, you have a moment to clear some space before the game ends.</li>
+    </ul>
+    <h4>Versus the computer</h4>
+    <ul>
+      <li>A <b>combo</b> of 4 or more drops a garbage slab on the other board: 4 blocks sends a slab 3 wide, 5 sends 4 wide, up to a full row.</li>
+      <li>A <b>chain</b> sends a full-width slab as tall as the chain minus one (×3 sends 2 rows), when the chain ends.</li>
+      <li>Garbage can't be moved. <b>Make a match touching it</b> to break it: its bottom row turns into normal blocks (which can start a chain), and the rest drops down.</li>
+      <li>"To you" shows garbage on its way. It turns red just before it drops. If garbage has nowhere to land, you lose.</li>
+    </ul>
+    <h4>3D cylinder</h4>
+    <ul>
+      <li>The board wraps all the way around: 16 columns, and the last one sits next to the first. Matches and swaps work across that seam.</li>
+      <li><b>Spin</b> it by dragging empty space or garbage sideways, or tap ◀ ▶. It settles on a column when you let go.</li>
+      <li>Drag a block to the edge of the front and the cylinder turns to follow it.</li>
+    </ul>
+    <h4>On a computer</h4>
+    <p>Arrow keys move the two-block cursor, Space swaps, Z raises the stack, P pauses. On the cylinder, Q and E turn it.</p>
+    <button class="btn" id="close">Close</button>`, o => (o.querySelector("#close").onclick = closeSheet));
+}
+
+window.addEventListener("resize", () => { if (game && canvas) fitCanvas(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && game && !game.over) togglePause(true); });
+window.androidBack = function () {
+  if (layer.childElementCount) { if (document.getElementById("overlay")?.dataset.dismissable) closeSheet(); return true; }
+  if (game && !game.over) { togglePause(true); confirmQuit(); return true; }
+  location.href = "index.html";
+  return true;
+};
+window.androidPause = () => { if (game && !game.over) togglePause(true); };
+
+showStart();
+</script>
+</body>
+</html>

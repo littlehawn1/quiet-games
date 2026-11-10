@@ -1,0 +1,1913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiet Sudoku</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sudoku">
+<style>
+/* Fonts ship with the game (fonts/ folder, SIL Open Font License) so it works offline. */
+@font-face { font-family: "Lexend"; src: url("fonts/lexend.woff2") format("woff2"); font-weight: 300 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 600 800; font-display: swap; }
+
+/* Layout: one centered column, like a phone app. Home screen and game screen swap in place. */
+:root {
+  --paper: #EEF1F5;        /* page background, a cool graph-paper grey */
+  --surface: #FFFFFF;      /* cells, buttons, sheets */
+  --ink: #17202E;          /* given digits, headings */
+  --ink-soft: #5A6475;     /* labels, secondary text */
+  --line: #CDD3DD;         /* thin grid lines */
+  --line-bold: #2A3445;    /* 3x3 box lines */
+  --accent: #2A56C6;       /* your digits, active controls */
+  --accent-ink: #FFFFFF;
+  --accent-soft: #D9E3F8;  /* selected cell */
+  --peer: #E7EBF2;         /* same row / column / box */
+  --same: #BFD0F3;         /* same digit as selected */
+  --error: #C62F3A;
+  --error-soft: #F7D9DC;
+  --success: #23875A;
+  --hint: #B26A00;         /* hint outline + pencil marks */
+  --hint-soft: #FCEFD6;    /* hint: area to look at */
+  --cause-soft: #D3EFDF;   /* hint: cells that explain the step */
+  --shadow: 0 1px 2px rgba(23,32,46,.06), 0 6px 20px rgba(23,32,46,.08);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Lexend", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0E131B; --surface: #171E29; --ink: #E3E8F0; --ink-soft: #8B96A8;
+    --line: #2A3342; --line-bold: #708099; --accent: #7EA1F2; --accent-ink: #0E131B;
+    --accent-soft: #263A63; --peer: #1D2533; --same: #31487A; --error: #F2707A;
+    --error-soft: #4A2229; --success: #5CC38E;
+    --hint: #F0B455; --hint-soft: #3A2E17; --cause-soft: #173A29;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0E131B; --surface: #171E29; --ink: #E3E8F0; --ink-soft: #8B96A8;
+  --line: #2A3342; --line-bold: #708099; --accent: #7EA1F2; --accent-ink: #0E131B;
+  --accent-soft: #263A63; --peer: #1D2533; --same: #31487A; --error: #F2707A;
+  --error-soft: #4A2229; --success: #5CC38E;
+  --hint: #F0B455; --hint-soft: #3A2E17; --cause-soft: #173A29;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100%;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- Top bar ---------- */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.topbar h1 {
+  font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -.01em;
+  margin: 0; flex: 1; text-align: center;
+}
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent;
+  display: grid; place-items: center; color: var(--ink-soft);
+}
+.icon-btn:hover { background: var(--peer); color: var(--ink); }
+.icon-btn svg { width: 24px; height: 24px; }
+.spacer { width: 44px; }
+
+/* ---------- Home ---------- */
+.home { display: flex; flex-direction: column; gap: 22px; padding-top: 4vh; }
+.brand { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.brand-mark { width: 92px; height: 92px; }
+.brand h2 {
+  font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1;
+  letter-spacing: -.025em; margin: 0; text-wrap: balance;
+}
+.brand p { margin: 0; color: var(--ink-soft); font-size: 15px; }
+.menu { display: flex; flex-direction: column; gap: 10px; }
+.btn {
+  border: 0; border-radius: 14px; padding: 15px 18px; font-size: 16px; font-weight: 500;
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 54px;
+}
+.btn:hover { filter: brightness(.98); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn .sub { font-size: 13px; font-weight: 400; opacity: .8; }
+.btn-col { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.btn svg { width: 20px; height: 20px; }
+.daily-done { color: var(--success); font-size: 13px; }
+
+/* ---------- Game info row ---------- */
+.info {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end;
+  font-size: 13px; color: var(--ink-soft);
+}
+.info > div { display: flex; flex-direction: column; gap: 2px; }
+.info > div:nth-child(2) { align-items: center; }
+.info > div:nth-child(3) { align-items: flex-end; }
+.info .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.info .value { color: var(--ink); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.info .value.bad { color: var(--error); }
+.timer { display: flex; align-items: center; gap: 6px; }
+.pause-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--peer);
+  display: grid; place-items: center; color: var(--ink);
+}
+.pause-btn svg { width: 14px; height: 14px; }
+
+/* ---------- Board ----------
+   Cells sit on a CSS grid (--cols x --rows). Thin lines are cell borders; box lines and
+   Killer cages are drawn by an SVG layer on top. Sizes scale with the board's width (cqi). */
+.board-wrap { position: relative; }
+.board-scroll { width: 100%; max-width: 100%; border-radius: 6px; }
+.board-scroll.zoomable {
+  aspect-ratio: 1; max-height: 64vh; overflow: auto; overscroll-behavior: contain;
+  background: var(--paper); -webkit-overflow-scrolling: touch;
+}
+.board {
+  --cell: calc(100cqi / var(--cols));
+  container-type: inline-size; position: relative;
+  width: 100%; max-width: none; aspect-ratio: var(--cols) / var(--rows);
+  display: grid; grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), 1fr);
+}
+.board .lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
+.lines .box-line { fill: none; stroke: var(--line-bold); stroke-width: 2px; stroke-linecap: square; vector-effect: non-scaling-stroke; }
+.lines .cage-line { fill: none; stroke: var(--ink-soft); stroke-width: 1px; stroke-dasharray: 3 2.5; vector-effect: non-scaling-stroke; }
+.cell {
+  position: relative; background: var(--surface); display: grid; place-items: center;
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  font-size: calc(var(--cell) * .62); font-weight: 400; line-height: 1; cursor: pointer;
+  transition: background-color .12s; min-width: 0;
+}
+.cell .digit { font-variant-numeric: tabular-nums; }
+.cell .cage-sum {
+  position: absolute; top: 1px; left: 1px; z-index: 3; padding: 0 .12em; border-radius: 2px;
+  font-size: calc(var(--cell) * .24); font-weight: 600; line-height: 1.15; color: var(--ink);
+  background: inherit;
+}
+.cell.given { color: var(--ink); font-weight: 500; }
+.cell.entered { color: var(--accent); }
+.cell.wrong { color: var(--error); }
+.cell.peer { background: var(--peer); }
+.cell.same { background: var(--same); }
+.cell.conflict { background: var(--error-soft); }
+.cell.selected { background: var(--accent-soft); }
+.cell.selected.wrong { background: var(--error-soft); }
+.notes {
+  position: absolute; inset: 0; display: grid;
+  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+  padding: 6%; font-size: calc(var(--cell) * .23); color: var(--ink-soft); font-weight: 400;
+}
+.cell.has-sum .notes { padding-top: 26%; padding-left: 10%; }
+.notes span { display: grid; place-items: center; visibility: hidden; border-radius: 3px; }
+.notes span.on { visibility: visible; }
+.notes span.match { color: var(--accent-ink); background: var(--accent); font-weight: 600; }
+.cell.hint-area { background: var(--hint-soft); }
+.cell.hint-cause { background: var(--cause-soft); }
+.cell.hint-elim { background: var(--error-soft); }
+.cell.hint-target { background: var(--hint-soft); box-shadow: inset 0 0 0 3px var(--hint); z-index: 1; }
+.notes span.ghost, .notes span.ghost-x { visibility: visible; font-size: calc(var(--cell) * .3); font-weight: 700; background: none; line-height: 1; }
+.notes span.ghost { color: var(--hint); }
+.notes span.ghost-x { color: var(--error); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.cell.flash { animation: flash .6s ease-out both; }
+@keyframes flash {
+  0% { background: var(--surface); }
+  40% { background: var(--same); }
+  100% { background: var(--surface); }
+}
+.cell.pop .digit { animation: pop .22s ease-out; }
+@keyframes pop { 0% { transform: scale(.6); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.board.paused .cell > * { visibility: hidden; }
+.pause-cover {
+  position: absolute; inset: 0; display: grid; place-items: center; z-index: 4;
+  background: color-mix(in srgb, var(--paper) 55%, transparent);
+  border-radius: 6px;
+}
+.pause-cover button {
+  width: 72px; height: 72px; border-radius: 50%; border: 0;
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; box-shadow: var(--shadow);
+}
+.pause-cover svg { width: 30px; height: 30px; }
+.zoom { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+.zoom button {
+  width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow); display: grid; place-items: center;
+}
+.zoom button:disabled { opacity: .4; cursor: default; }
+.zoom svg { width: 18px; height: 18px; }
+
+/* ---------- Tools ---------- */
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tool {
+  border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px 0; font-size: 12px; color: var(--ink-soft); border-radius: 12px;
+}
+.tool:hover { background: var(--peer); }
+.tool:disabled { opacity: .4; cursor: default; }
+.tool .ico { position: relative; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tool .ico svg { width: 22px; height: 22px; }
+.tool .badge {
+  position: absolute; top: -4px; right: -8px; min-width: 22px; height: 18px; padding: 0 5px;
+  border-radius: 9px; font-size: 10px; font-weight: 600; display: grid; place-items: center;
+  background: var(--ink-soft); color: var(--surface); letter-spacing: .02em;
+}
+.tool.on .ico { background: var(--accent); color: var(--accent-ink); }
+.tool.on .badge { background: var(--accent); color: var(--accent-ink); outline: 2px solid var(--paper); }
+.tool.on { color: var(--accent); }
+
+/* ---------- Hint card (replaces the tool row while open) ---------- */
+.hint-card {
+  background: var(--surface); border-radius: 16px; box-shadow: var(--shadow);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+  border-top: 3px solid var(--hint); animation: rise .18s ease-out;
+}
+.hint-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hint-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--hint); font-weight: 600; }
+.hint-close { width: 32px; height: 32px; margin: -6px -8px -6px 0; border: 0; background: transparent; border-radius: 8px; color: var(--ink-soft); display: grid; place-items: center; }
+.hint-close:hover { background: var(--peer); }
+.hint-close svg { width: 18px; height: 18px; }
+.hint-card h4 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
+.hint-card p { margin: 0; line-height: 1.5; font-size: 14px; max-width: 62ch; }
+.hint-card p b { color: var(--hint); font-weight: 600; }
+.hint-card .tip { font-size: 13px; color: var(--ink-soft); }
+.hint-card details { font-size: 13px; color: var(--ink-soft); }
+.hint-card summary { cursor: pointer; color: var(--hint); font-weight: 500; padding: 2px 0; }
+.hint-card details p { font-size: 13px; color: var(--ink-soft); padding-top: 4px; }
+.hint-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding-top: 2px; }
+.hint-actions button { border: 0; border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: 500; background: var(--peer); }
+.hint-actions button.primary { background: var(--hint); color: var(--surface); }
+
+/* ---------- Number pad ---------- */
+.pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+.num {
+  border: 0; background: transparent; border-radius: 10px; padding: 6px 0 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--accent);
+}
+.num:hover { background: var(--peer); }
+.num .n { font-size: clamp(26px, 8vw, 38px); font-weight: 300; line-height: 1.05; }
+.num .left { font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.num.used-up { visibility: hidden; }
+.pad.notes-mode .num .n { color: var(--ink-soft); }
+
+/* ---------- Sheets (pop-up panels) ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 20; background: rgba(10,14,20,.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  animation: fade .15s ease-out;
+}
+@media (min-width: 600px) { .overlay { align-items: center; } }
+@keyframes fade { from { opacity: 0; } }
+.sheet {
+  width: 100%; max-width: 440px; background: var(--surface); border-radius: 20px;
+  padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
+  max-height: 88vh; overflow-y: auto; animation: rise .2s ease-out;
+}
+@keyframes rise { from { transform: translateY(16px); opacity: .6; } }
+.sheet h3 { font-family: var(--font-display); font-weight: 800; font-size: 24px; margin: 0; letter-spacing: -.015em; text-wrap: balance; }
+.sheet p { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+.sheet .btn { box-shadow: none; background: var(--peer); }
+.sheet .btn.primary { background: var(--accent); }
+.choice-list { display: flex; flex-direction: column; gap: 8px; }
+.choice-list .btn { justify-content: space-between; }
+.choice-list .btn .hint-text { font-size: 13px; color: var(--ink-soft); font-weight: 400; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.result-grid div { background: var(--peer); border-radius: 12px; padding: 10px 4px; display: flex; flex-direction: column; gap: 2px; }
+.result-grid b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.result-grid span { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.win-mark { color: var(--success); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--peer); padding: 4px; border-radius: 12px; }
+.tabs.three { grid-template-columns: repeat(3, 1fr); }
+.tabs + .tabs { margin-top: -6px; }
+.mode-blurb { font-size: 14px; }
+.tabs button { border: 0; background: transparent; border-radius: 9px; padding: 8px 0; font-size: 13px; color: var(--ink-soft); }
+.tabs button.on { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: var(--shadow); }
+.stat-list { display: flex; flex-direction: column; }
+.stat-row { display: flex; justify-content: space-between; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.stat-row:last-child { border-bottom: 0; }
+.stat-row span { color: var(--ink-soft); }
+.stat-row b { font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.setting:last-of-type { border-bottom: 0; }
+.setting .txt { display: flex; flex-direction: column; gap: 2px; }
+.setting .txt small { color: var(--ink-soft); font-size: 12px; }
+.switch { position: relative; width: 48px; height: 28px; flex: none; }
+.switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch .track { position: absolute; inset: 0; border-radius: 14px; background: var(--line); transition: background .15s; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .15s; }
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(20px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 14px;
+  z-index: 30; box-shadow: var(--shadow); animation: fade .15s ease-out; white-space: nowrap;
+}
+.loading { text-align: center; color: var(--ink-soft); padding: 40px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+@media (max-height: 700px) {
+  .app { gap: 10px; padding-block: 6px 12px; }
+  .tool .ico { width: 40px; height: 40px; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="layer"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Quiet Sudoku: a no-ads sudoku game.
+   Everything runs in your browser. Your game, stats and settings are
+   saved in this browser's local storage.
+
+   Sections:
+     1. Small helpers (storage, random numbers, time formatting)
+     2. Board shapes (Classic, Killer, Samurai), solver, logic engine,
+        puzzle generator and hint text
+     3. Game state and rules (placing numbers, notes, undo, hints...)
+     4. Drawing the screens
+     5. Pop-up sheets (new game, win, game over, stats, settings)
+     6. Keyboard + startup
+   ===================================================================== */
+
+/* ---------- 1. Helpers ---------- */
+const store = {
+  get(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  remove(key) { try { localStorage.removeItem(key); } catch {} },
+};
+
+// A small seeded random number generator, so the daily puzzle is the same for everyone each day.
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shuffle(list, rand) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+function formatTime(totalSeconds) {
+  const s = Math.floor(totalSeconds % 60), m = Math.floor(totalSeconds / 60) % 60, h = Math.floor(totalSeconds / 3600);
+  const pad = n => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function bitCount(m) { let n = 0; while (m) { m &= m - 1; n++; } return n; }
+
+/* ---------- 2. Board shapes ----------
+   A "shape" describes one kind of board:
+     pos[i]    where cell i sits on screen (row r, column c)
+     houses    groups that must contain 1-9 exactly once (rows, columns and boxes)
+     cages     Killer only: groups whose digits add up to a total and never repeat
+     peers[i]  every other cell that can't hold the same digit as cell i
+   Classic and Killer use one 9x9 grid. Samurai joins five 9x9 grids that share corner boxes. */
+const ALL_DIGITS = 0x3FE;
+const BIT = d => 1 << d;
+const BOX_NAMES = ["top-left", "top-middle", "top-right", "middle-left", "center", "middle-right", "bottom-left", "bottom-middle", "bottom-right"];
+const digitsIn = mask => [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(d => mask & BIT(d));
+const andList = a => (a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]);
+const orList = a => (a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " or " + a[a.length - 1]);
+const capitalize = s => s[0].toUpperCase() + s.slice(1);
+
+const SAMURAI_GRIDS = [
+  { name: "top-left", r0: 0, c0: 0 }, { name: "top-right", r0: 0, c0: 12 }, { name: "center", r0: 6, c0: 6 },
+  { name: "bottom-left", r0: 12, c0: 0 }, { name: "bottom-right", r0: 12, c0: 12 },
+];
+
+function buildShape(variant, cages) {
+  const samurai = variant === "samurai";
+  const grids = samurai ? SAMURAI_GRIDS : [{ name: "", r0: 0, c0: 0 }];
+  const rows = samurai ? 21 : 9, cols = rows;
+  // Cells are numbered row by row, so a classic board keeps index = row * 9 + column.
+  const taken = new Set();
+  for (const g of grids) for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) taken.add((g.r0 + r) * cols + g.c0 + c);
+  const keys = [...taken].sort((a, b) => a - b);
+  const indexAt = new Map(keys.map((k, i) => [k, i]));
+  const pos = keys.map(k => ({ r: Math.floor(k / cols), c: k % cols }));
+  // Off the board (including past the right edge) is always undefined, never the next row.
+  const cellAt = (r, c) => (r < 0 || c < 0 || r >= rows || c >= cols ? undefined : indexAt.get(r * cols + c));
+
+  const houses = [];
+  const seenBoxes = new Set();
+  const lineLookup = new Map();   // "grid|kind|cell" -> house, used by X-Wing
+  grids.forEach((g, gi) => {
+    for (let k = 0; k < 9; k++) {
+      const row = { kind: "row", grid: gi, index: k, cells: [] };
+      const col = { kind: "column", grid: gi, index: k, cells: [] };
+      const box = { kind: "box", grid: gi, index: k, cells: [] };
+      for (let j = 0; j < 9; j++) {
+        row.cells.push(cellAt(g.r0 + k, g.c0 + j));
+        col.cells.push(cellAt(g.r0 + j, g.c0 + k));
+        box.cells.push(cellAt(g.r0 + Math.floor(k / 3) * 3 + Math.floor(j / 3), g.c0 + (k % 3) * 3 + (j % 3)));
+      }
+      for (const h of [row, col]) { houses.push(h); h.cells.forEach(i => lineLookup.set(`${gi}|${h.kind}|${i}`, h)); }
+      const key = box.cells.join(",");
+      if (!seenBoxes.has(key)) { seenBoxes.add(key); houses.push(box); }   // shared Samurai boxes appear once
+    }
+  });
+  houses.forEach((h, n) => (h.id = n));
+  const N = pos.length;
+  const cellHouses = Array.from({ length: N }, () => []);
+  houses.forEach(h => h.cells.forEach(i => cellHouses[i].push(h)));
+  const boxOf = cellHouses.map(hs => hs.find(h => h.kind === "box"));
+
+  cages = (cages || []).map((cg, n) => ({ id: n, sum: cg.sum, cells: cg.cells.slice().sort((a, b) => a - b) }));
+  const cageOf = new Array(N).fill(null);
+  cages.forEach(cg => cg.cells.forEach(i => (cageOf[i] = cg)));
+
+  const peers = [];
+  for (let i = 0; i < N; i++) {
+    const s = new Set();
+    for (const h of cellHouses[i]) for (const j of h.cells) s.add(j);
+    if (cageOf[i]) for (const j of cageOf[i].cells) s.add(j);
+    s.delete(i);
+    peers.push([...s]);
+  }
+  // Cells that share a row, column or box with cell i (used for the selection highlight).
+  const housePeers = cellHouses.map((hs, i) => [...new Set(hs.flatMap(h => h.cells))].filter(j => j !== i));
+
+  const gridName = gi => `the ${grids[gi].name} grid`;
+  const shape = {
+    variant, samurai, rows, cols, size: N, grids, pos, houses, cellHouses, boxOf, cages, cageOf, peers, housePeers, cellAt,
+    partner: i => cellAt(rows - 1 - pos[i].r, cols - 1 - pos[i].c),
+    line: (gi, kind, i) => lineLookup.get(`${gi}|${kind}|${i}`),
+    houseName(h) {
+      const base = h.kind === "box" ? `the ${BOX_NAMES[h.index]} box` : `${h.kind} ${h.index + 1}`;
+      return samurai ? `${base} of ${gridName(h.grid)}` : base;
+    },
+    cellName(i) {
+      if (!samurai) return `row ${pos[i].r + 1}, column ${pos[i].c + 1}`;
+      const h = cellHouses[i][0];   // the first grid this cell belongs to
+      const g = grids[h.grid];
+      return `row ${pos[i].r - g.r0 + 1}, column ${pos[i].c - g.c0 + 1} of ${gridName(h.grid)}`;
+    },
+    cageName: cg => `the ${cg.cells.length}-cell cage that adds up to ${cg.sum}`,
+  };
+  return shape;
+}
+
+const shapeCache = {};
+function shapeFor(variant, cages) {
+  if (variant === "killer") return buildShape("killer", cages);
+  return shapeCache[variant] || (shapeCache[variant] = buildShape(variant));
+}
+
+// Every set of different digits, grouped by how many digits and what they add up to (for Killer cages).
+const COMBOS = Array.from({ length: 10 }, () => Array(46).fill(null).map(() => []));
+for (let m = 2; m <= ALL_DIGITS; m += 2) {
+  const ds = digitsIn(m);
+  COMBOS[ds.length][ds.reduce((a, b) => a + b, 0)].push(m);
+}
+
+/* ---------- Solver ----------
+   Backtracking search. Counts solutions up to `limit` and returns the first one found.
+   If `rand` is given it tries digits in random order (used to build new grids). */
+function solve(shape, grid, limit, rand) {
+  const g = grid.slice(), N = shape.size;
+  const used = new Array(shape.houses.length).fill(0);
+  const cageUsed = new Array(shape.cages.length).fill(0), cageSum = new Array(shape.cages.length).fill(0), cageLeft = shape.cages.map(c => c.cells.length);
+  const place = (i, d, sign) => {
+    const b = BIT(d);
+    for (const h of shape.cellHouses[i]) used[h.id] ^= b;
+    const cg = shape.cageOf[i];
+    if (cg) { cageUsed[cg.id] ^= b; cageSum[cg.id] += sign * d; cageLeft[cg.id] -= sign; }
+  };
+  for (let i = 0; i < N; i++) {
+    if (!g[i]) continue;
+    for (const h of shape.cellHouses[i]) if (used[h.id] & BIT(g[i])) return { count: 0, solution: null };
+    place(i, g[i], 1);
+  }
+  const fits = (cg, d) => {
+    // Could the rest of the cage still reach its total if this cell were d?
+    const k = cageLeft[cg.id] - 1, r = cg.sum - cageSum[cg.id] - d;
+    if (k === 0) return r === 0;
+    const avail = digitsIn(ALL_DIGITS & ~cageUsed[cg.id] & ~BIT(d));
+    if (avail.length < k) return false;
+    let lo = 0, hi = 0;
+    for (let j = 0; j < k; j++) { lo += avail[j]; hi += avail[avail.length - 1 - j]; }
+    return r >= lo && r <= hi;
+  };
+  const optionsFor = i => {
+    let m = ALL_DIGITS;
+    for (const h of shape.cellHouses[i]) m &= ~used[h.id];
+    const cg = shape.cageOf[i];
+    if (cg) { m &= ~cageUsed[cg.id]; for (const d of digitsIn(m)) if (!fits(cg, d)) m &= ~BIT(d); }
+    return m;
+  };
+  let count = 0, solution = null;
+  function step() {
+    let best = -1, bestOptions = 0, fewest = 10;
+    for (let i = 0; i < N; i++) {
+      if (g[i]) continue;
+      const options = optionsFor(i), n = bitCount(options);
+      if (n < fewest) { best = i; bestOptions = options; fewest = n; if (n <= 1) break; }
+    }
+    if (best === -1) { count++; if (!solution) solution = g.slice(); return count >= limit; }
+    if (fewest === 0) return false;
+    const digits = digitsIn(bestOptions);
+    if (rand) shuffle(digits, rand);
+    for (const d of digits) {
+      g[best] = d; place(best, d, 1);
+      if (step()) return true;
+      place(best, d, -1); g[best] = 0;
+    }
+    return false;
+  }
+  step();
+  return { count, solution };
+}
+
+/* ---------- 2b. Logic engine (hints + difficulty checks) ----------
+   Hints teach instead of giving answers. The engine looks for the next step a person
+   could find by logic, trying the simplest techniques first:
+
+     Placing a number                       Ruling numbers out
+     - Last empty cell                      - Cage combinations (Killer)
+     - Last cell of a cage (Killer)         - Cage must contain (Killer)
+     - Hidden single                        - Pointing / Claiming
+     - Naked single                         - Naked pair / triple, Hidden pair
+     - Rule of 45 (Killer)                  - X-Wing
+     - Only spot in a cage (Killer)
+
+   If it has to rule numbers out first, the hint walks through each step in order,
+   ending with the number that can now be placed. The player places it themselves. */
+
+// Pencil marks: for each empty cell, the digits not already used by any of its peers.
+function candidatesFor(shape, values) {
+  const cand = new Array(shape.size).fill(0);
+  for (let i = 0; i < shape.size; i++) {
+    if (values[i]) continue;
+    let m = ALL_DIGITS;
+    for (const p of shape.peers[i]) if (values[p]) m &= ~BIT(values[p]);
+    cand[i] = m;
+  }
+  return cand;
+}
+const spotsFor = (h, d, values, cand) => h.cells.filter(i => !values[i] && cand[i] & BIT(d));
+const houseHas = (h, d, values) => h.cells.some(i => values[i] === d);
+
+/* Killer: which combinations can a cage still be, and which digits can each empty cell take? */
+function cageOptions(cg, values, cand) {
+  let filled = 0, filledSum = 0;
+  const empty = [];
+  for (const i of cg.cells) { if (values[i]) { filled |= BIT(values[i]); filledSum += values[i]; } else empty.push(i); }
+  const allowed = empty.map(() => 0);
+  const combos = [];
+  for (const m of COMBOS[cg.cells.length][cg.sum]) {
+    if ((m & filled) !== filled) continue;
+    let ok = false;
+    const picks = [];
+    (function assign(k, avail) {
+      if (k === empty.length) { ok = true; picks.forEach((d, j) => (allowed[j] |= BIT(d))); return; }
+      for (const d of digitsIn(avail & cand[empty[k]])) { picks.push(d); assign(k + 1, avail & ~BIT(d)); picks.pop(); }
+    })(0, m & ~filled);
+    if (ok) combos.push(m);
+  }
+  const required = combos.reduce((acc, m) => acc & m, ALL_DIGITS) & ~filled;
+  return { combos, allowed, empty, filled, filledSum, required };
+}
+
+// Rule of 45: a house always adds up to 45, so cages inside (or covering) it pin down the leftover cell.
+function rule45(shape, values) {
+  for (const h of shape.houses) {
+    const inHouse = new Set(h.cells);
+    const touching = [...new Set(h.cells.map(i => shape.cageOf[i]))];
+    const inside = touching.filter(cg => cg.cells.every(i => inHouse.has(i)));
+    const covered = new Set(inside.flatMap(cg => cg.cells));
+    const rest = h.cells.filter(i => !covered.has(i));
+    const restEmpty = rest.filter(i => !values[i]);
+    if (restEmpty.length === 1 && inside.length) {
+      const insideSum = inside.reduce((a, cg) => a + cg.sum, 0);
+      const known = rest.reduce((a, i) => a + values[i], 0);
+      return { technique: "rule45", way: "in", house: h, cages: inside, cell: restEmpty[0], digit: 45 - insideSum - known, insideSum, others: rest.filter(i => values[i]), area: [], digits: 0 };
+    }
+    const outside = touching.flatMap(cg => cg.cells).filter(i => !inHouse.has(i));
+    const outsideEmpty = outside.filter(i => !values[i]);
+    if (outsideEmpty.length === 1 && touching.length > 1) {
+      const total = touching.reduce((a, cg) => a + cg.sum, 0);
+      const known = outside.reduce((a, i) => a + values[i], 0);
+      return { technique: "rule45", way: "out", house: h, cages: touching, cell: outsideEmpty[0], digit: total - 45 - known, insideSum: total, others: outside.filter(i => values[i]), area: [], digits: 0 };
+    }
+  }
+  return null;
+}
+
+function findPlacement(shape, values, cand) {
+  for (const h of shape.houses) {
+    const empty = h.cells.filter(i => !values[i]);
+    if (empty.length === 1) {
+      const used = h.cells.reduce((m, i) => m | BIT(values[i]), 0);
+      return { technique: "lastCell", cell: empty[0], digit: digitsIn(ALL_DIGITS & ~used)[0], house: h, area: [], digits: 0 };
+    }
+  }
+  for (const cg of shape.cages) {
+    const empty = cg.cells.filter(i => !values[i]);
+    if (empty.length === 1 && cg.cells.length > 1) {
+      return { technique: "cageLast", cell: empty[0], digit: cg.sum - cg.cells.reduce((a, i) => a + values[i], 0), cage: cg, area: [], digits: 0 };
+    }
+  }
+  for (const h of shape.houses) {
+    for (let d = 1; d <= 9; d++) {
+      if (houseHas(h, d, values)) continue;
+      const spots = spotsFor(h, d, values, cand);
+      if (spots.length === 1) return { technique: "hiddenSingle", cell: spots[0], digit: d, house: h, area: h.cells, digits: BIT(d) };
+    }
+  }
+  for (let i = 0; i < shape.size; i++) {
+    if (!values[i] && bitCount(cand[i]) === 1) return { technique: "nakedSingle", cell: i, digit: digitsIn(cand[i])[0], area: [i], digits: ALL_DIGITS };
+  }
+  if (shape.cages.length) {
+    const r = rule45(shape, values);
+    if (r) return r;
+    for (const cg of shape.cages) {
+      const o = cageOptions(cg, values, cand);
+      for (const d of digitsIn(o.required)) {
+        const spots = o.empty.filter(i => cand[i] & BIT(d));
+        if (spots.length === 1) return { technique: "cageHiddenSingle", cell: spots[0], digit: d, cage: cg, combos: o.combos, area: cg.cells, digits: ALL_DIGITS };
+      }
+    }
+  }
+  return null;
+}
+
+function combinations(list, size, start = 0, picked = [], out = []) {
+  if (picked.length === size) { out.push(picked.slice()); return out; }
+  for (let k = start; k < list.length; k++) { picked.push(list[k]); combinations(list, size, k + 1, picked, out); picked.pop(); }
+  return out;
+}
+
+const ELIMINATION_FINDERS = [
+  // Killer: digits that fit none of a cage's possible combinations.
+  function cageCombo(shape, values, cand) {
+    for (const cg of shape.cages) {
+      const o = cageOptions(cg, values, cand);
+      const elims = [];
+      o.empty.forEach((i, j) => digitsIn(cand[i] & ~o.allowed[j]).forEach(d => elims.push([i, d])));
+      if (elims.length) return { technique: "cageCombo", cage: cg, combos: o.combos, filled: o.filled, cause: o.empty, elims, area: cg.cells, digits: ALL_DIGITS };
+    }
+    return null;
+  },
+  // Killer: a digit every combination needs, whose spots in the cage all share one row, column or box.
+  function cagePointing(shape, values, cand) {
+    for (const cg of shape.cages) {
+      const o = cageOptions(cg, values, cand);
+      for (const d of digitsIn(o.required)) {
+        const spots = o.empty.filter(i => cand[i] & BIT(d));
+        if (spots.length < 2) continue;
+        for (const h of shape.cellHouses[spots[0]]) {
+          if (!spots.every(i => h.cells.includes(i))) continue;
+          const elims = h.cells.filter(i => !cg.cells.includes(i) && !values[i] && cand[i] & BIT(d));
+          if (elims.length) return { technique: "cagePointing", cage: cg, house: h, digit: d, combos: o.combos, cause: spots, elims: elims.map(i => [i, d]), area: cg.cells, digits: ALL_DIGITS };
+        }
+      }
+    }
+    return null;
+  },
+  // Pointing / Claiming: inside one house, every spot for a digit is also inside another house.
+  function intersection(shape, values, cand) {
+    for (const pass of ["box", "line"]) {
+      for (const a of shape.houses) {
+        if ((a.kind === "box") !== (pass === "box")) continue;
+        for (let d = 1; d <= 9; d++) {
+          const spots = spotsFor(a, d, values, cand);
+          if (spots.length < 2) continue;
+          for (const b of shape.cellHouses[spots[0]]) {
+            if (b === a || !spots.every(i => b.cells.includes(i))) continue;
+            const elims = b.cells.filter(i => !a.cells.includes(i) && !values[i] && cand[i] & BIT(d));
+            if (elims.length) return { technique: a.kind === "box" ? "pointing" : "claiming", digit: d, from: a, to: b, cause: spots, elims: elims.map(i => [i, d]), area: a.cells, digits: BIT(d) };
+          }
+        }
+      }
+    }
+    return null;
+  },
+  nakedSubset(2),
+  // Hidden pair: two digits that can only go in the same two cells of a house.
+  function hiddenPair(shape, values, cand) {
+    for (const h of shape.houses) {
+      for (let d1 = 1; d1 <= 9; d1++) {
+        const s1 = spotsFor(h, d1, values, cand);
+        if (s1.length !== 2 || houseHas(h, d1, values)) continue;
+        for (let d2 = d1 + 1; d2 <= 9; d2++) {
+          const s2 = spotsFor(h, d2, values, cand);
+          if (s2.length !== 2 || s2[0] !== s1[0] || s2[1] !== s1[1] || houseHas(h, d2, values)) continue;
+          const keep = BIT(d1) | BIT(d2);
+          const elims = [];
+          for (const i of s1) for (const d of digitsIn(cand[i] & ~keep)) elims.push([i, d]);
+          if (elims.length) return { technique: "hiddenPair", house: h, pair: [d1, d2], cause: s1, elims, area: h.cells, digits: keep };
+        }
+      }
+    }
+    return null;
+  },
+  nakedSubset(3),
+  // X-Wing: in two rows of one grid, a digit fits in only the same two columns (or rows and columns swapped).
+  function xWing(shape, values, cand) {
+    for (const [kind, crossKind] of [["row", "column"], ["column", "row"]]) {
+      for (let gi = 0; gi < shape.grids.length; gi++) {
+        const lines = shape.houses.filter(h => h.kind === kind && h.grid === gi);
+        for (let d = 1; d <= 9; d++) {
+          const twos = lines.map(h => ({ h, s: spotsFor(h, d, values, cand) })).filter(x => x.s.length === 2);
+          for (const [a, b] of combinations(twos, 2)) {
+            const crossA = a.s.map(i => shape.line(gi, crossKind, i)), crossB = b.s.map(i => shape.line(gi, crossKind, i));
+            if (crossA[0] !== crossB[0] || crossA[1] !== crossB[1]) continue;
+            const elims = [];
+            for (const cl of crossA) for (const i of cl.cells) {
+              if (!values[i] && cand[i] & BIT(d) && !a.s.includes(i) && !b.s.includes(i)) elims.push([i, d]);
+            }
+            if (elims.length) return { technique: "xWing", digit: d, lines: [a.h, b.h], crossLines: crossA, cause: [...a.s, ...b.s], elims, area: [...a.h.cells, ...b.h.cells], digits: BIT(d) };
+          }
+        }
+      }
+    }
+    return null;
+  },
+];
+
+// Naked pair / triple: N cells in a house that together can only hold the same N digits.
+function nakedSubset(size) {
+  return function (shape, values, cand) {
+    for (const h of shape.houses) {
+      const small = h.cells.filter(i => !values[i] && bitCount(cand[i]) >= 2 && bitCount(cand[i]) <= size);
+      for (const group of combinations(small, size)) {
+        const union = group.reduce((m, i) => m | cand[i], 0);
+        if (bitCount(union) !== size) continue;
+        const elims = [];
+        for (const i of h.cells) {
+          if (values[i] || group.includes(i)) continue;
+          for (const d of digitsIn(cand[i] & union)) elims.push([i, d]);
+        }
+        if (elims.length) return { technique: size === 2 ? "nakedPair" : "nakedTriple", house: h, group: union, cause: group, elims, area: group, digits: ALL_DIGITS };
+      }
+    }
+    return null;
+  };
+}
+
+/* Find the next step. Returns one of:
+     { mistake: cell }               a wrong number is on the board
+     { steps: [...], final: step }   rule-outs (maybe none) followed by a placement
+     { stuck: true }                 needs a technique this engine doesn't know */
+function findHint(shape, values, solution) {
+  if (solution) for (let i = 0; i < shape.size; i++) if (values[i] && values[i] !== solution[i]) return { mistake: i };
+  const cand = candidatesFor(shape, values);
+  const steps = [];
+  for (let round = 0; round < 60; round++) {
+    const final = findPlacement(shape, values, cand);
+    if (final) return { steps: keepNeededSteps(steps, final), final };
+    let step = null;
+    for (const finder of ELIMINATION_FINDERS) if ((step = finder(shape, values, cand))) break;
+    if (!step) break;
+    step.elims.forEach(([i, d]) => (cand[i] &= ~BIT(d)));
+    steps.push(step);
+  }
+  return { stuck: true };
+}
+
+// Drop rule-out steps that don't lead to the final placement, so the hint stays short.
+function keepNeededSteps(steps, final) {
+  const needed = [final];
+  const kept = [];
+  for (let k = steps.length - 1; k >= 0; k--) {
+    const s = steps[k];
+    const matters = s.elims.some(([i, d]) => needed.some(n => n.area.includes(i) && n.digits & BIT(d)));
+    if (matters) { kept.unshift(s); needed.push(s); }
+  }
+  return kept;
+}
+
+/* Fast solver used by the puzzle generator. It keeps pencil marks between steps and places
+   every single it can see at once, so it's much quicker than asking for hints one by one.
+   mode "basic": only last cells, hidden singles and naked singles (Easy and Medium).
+   mode "full":  every technique the hints know. Returns the board it reached. */
+function logicSolve(shape, puzzle, mode) {
+  const values = puzzle.slice();
+  const cand = candidatesFor(shape, values);
+  const place = (i, d) => { values[i] = d; cand[i] = 0; for (const p of shape.peers[i]) cand[p] &= ~BIT(d); };
+  for (let guard = 0; guard < 5000; guard++) {
+    let placed = 0;
+    for (let i = 0; i < shape.size; i++) {
+      if (!values[i] && bitCount(cand[i]) === 1) { place(i, digitsIn(cand[i])[0]); placed++; }
+    }
+    for (const h of shape.houses) {
+      for (let d = 1; d <= 9; d++) {
+        if (houseHas(h, d, values)) continue;
+        const spots = spotsFor(h, d, values, cand);
+        if (spots.length === 1) { place(spots[0], d); placed++; }
+        else if (spots.length === 0) return { solved: false, values };   // contradiction
+      }
+    }
+    if (shape.cages.length && mode === "full") {
+      for (const cg of shape.cages) {
+        const empty = cg.cells.filter(i => !values[i]);
+        if (empty.length === 1) {
+          const d = cg.sum - cg.cells.reduce((a, i) => a + values[i], 0);
+          if (d >= 1 && d <= 9 && cand[empty[0]] & BIT(d)) { place(empty[0], d); placed++; }
+        }
+      }
+      const r = rule45(shape, values);
+      if (r && r.digit >= 1 && r.digit <= 9 && cand[r.cell] & BIT(r.digit)) { place(r.cell, r.digit); placed++; }
+    }
+    if (!values.includes(0)) return { solved: true, values };
+    if (placed) continue;
+    if (mode !== "full") return { solved: false, values };
+    let step = null;
+    for (const finder of ELIMINATION_FINDERS) if ((step = finder(shape, values, cand))) break;
+    if (!step) {
+      // Killer: a digit a cage must contain with only one spot left.
+      const p = findPlacement(shape, values, cand);
+      if (p) { place(p.cell, p.digit); continue; }
+      return { solved: false, values };
+    }
+    step.elims.forEach(([i, d]) => (cand[i] &= ~BIT(d)));
+  }
+  return { solved: false, values };
+}
+
+// Can the whole puzzle be solved one hint at a time, exactly as the player would see them?
+function solvableWithHints(shape, puzzle, solution) {
+  const values = puzzle.slice();
+  while (values.includes(0)) {
+    const r = findHint(shape, values, null);
+    if (r.stuck) return { ok: false, values };
+    if (solution && r.final.digit !== solution[r.final.cell]) return { ok: false, values, wrong: true };
+    values[r.final.cell] = r.final.digit;
+  }
+  return { ok: true, values };
+}
+
+/* ---------- Puzzle generator ---------- */
+const LEVELS = {
+  easy:   { label: "Easy",   clues: 38, basicsOnly: true,  blurb: "Relaxed, a good warm-up",    killerGivens: 14, cageSizes: [2, 2, 2, 3, 3] },
+  medium: { label: "Medium", clues: 31, basicsOnly: true,  blurb: "Fewer clues to start with",  killerGivens: 6,  cageSizes: [2, 2, 3, 3, 3, 4] },
+  hard:   { label: "Hard",   clues: 27, basicsOnly: false, blurb: "Needs notes and patience",   killerGivens: 0,  cageSizes: [2, 3, 3, 4, 4, 5] },
+  expert: { label: "Expert", clues: 23, basicsOnly: false, blurb: "For long, quiet sessions",   killerGivens: 0,  cageSizes: [3, 3, 4, 4, 5] },
+};
+const VARIANTS = {
+  classic: { label: "Classic", title: "Quiet Sudoku", blurb: "The 9×9 puzzle you know" },
+  killer:  { label: "Killer",  title: "Killer Sudoku", blurb: "Few numbers. Cages show what their cells add up to" },
+  samurai: { label: "Samurai", title: "Samurai Sudoku", blurb: "Five grids that share their corner boxes" },
+};
+
+function generatePuzzle(variant, level, rand = Math.random) {
+  if (variant === "killer") return generateKiller(level, rand);
+  const shape = shapeFor(variant);
+  const cfg = LEVELS[level];
+  const target = Math.round(cfg.clues * shape.size / 81);
+  const mode = cfg.basicsOnly ? "basic" : "full";
+  let fallback = null;
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const solution = solve(shape, new Array(shape.size).fill(0), 1, rand).solution;
+    const puzzle = solution.slice();
+    let clues = shape.size;
+    // Every removal keeps the puzzle solvable by logic alone, which also means it has exactly one solution.
+    const tryRemove = cells => {
+      const saved = cells.map(i => puzzle[i]);
+      cells.forEach(i => (puzzle[i] = 0));
+      if (logicSolve(shape, puzzle, mode).solved) clues -= cells.length;
+      else cells.forEach((i, k) => (puzzle[i] = saved[k]));
+    };
+    const pairs = shuffle([...Array(shape.size).keys()].filter(i => i <= shape.partner(i)), rand);
+    for (const i of pairs) {
+      if (clues <= target) break;
+      const j = shape.partner(i);
+      tryRemove(i === j ? [i] : [i, j]);
+    }
+    if (!cfg.basicsOnly) {
+      for (const i of shuffle([...Array(shape.size).keys()], rand)) {
+        if (clues <= target) break;
+        if (puzzle[i]) tryRemove([i]);
+      }
+    }
+    const result = { puzzle, solution, clues, cages: null };
+    if (!cfg.basicsOnly) {
+      if (!solvableWithHints(shape, puzzle, solution).ok) continue;   // a hint would get stuck
+      if (logicSolve(shape, puzzle, "basic").solved) { if (!fallback || clues < fallback.clues) fallback = result; continue; }
+    }
+    return result;
+  }
+  return fallback;
+}
+
+/* Killer: fill a grid, cut it into cages, then add starting numbers until every step
+   can be found by logic (which also guarantees exactly one solution). */
+function makeCages(shape, solution, sizes, rand) {
+  const N = shape.size, cageId = new Array(N).fill(-1), cages = [];
+  const neighbours = i => {
+    const { r, c } = shape.pos[i];
+    return [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].map(([a, b]) => shape.cellAt(a, b)).filter(j => j !== undefined);
+  };
+  for (const start of shuffle([...Array(N).keys()], rand)) {
+    if (cageId[start] !== -1) continue;
+    const want = sizes[Math.floor(rand() * sizes.length)];
+    const cells = [start];
+    let used = BIT(solution[start]);
+    cageId[start] = cages.length;
+    while (cells.length < want) {
+      const options = [...new Set(cells.flatMap(neighbours))].filter(j => cageId[j] === -1 && !(used & BIT(solution[j])));
+      if (!options.length) break;
+      const j = options[Math.floor(rand() * options.length)];
+      cells.push(j); cageId[j] = cages.length; used |= BIT(solution[j]);
+    }
+    cages.push(cells);
+  }
+  // Fold single-cell cages into a neighbour where possible, so they don't act as free numbers.
+  for (let k = 0; k < cages.length; k++) {
+    if (cages[k].length !== 1) continue;
+    const i = cages[k][0];
+    for (const j of shuffle(neighbours(i), rand)) {
+      const other = cages[cageId[j]];
+      if (other.length < 6 && !other.some(x => solution[x] === solution[i])) {
+        other.push(i); cageId[i] = cageId[j]; cages[k] = [];
+        break;
+      }
+    }
+  }
+  return cages.filter(c => c.length).map(cells => ({ cells, sum: cells.reduce((a, i) => a + solution[i], 0) }));
+}
+
+function generateKiller(level, rand) {
+  const cfg = LEVELS[level];
+  const plain = shapeFor("classic");
+  const solution = solve(plain, new Array(81).fill(0), 1, rand).solution;
+  const cages = makeCages(plain, solution, cfg.cageSizes, rand);
+  const shape = buildShape("killer", cages);
+  const puzzle = new Array(81).fill(0);
+  for (const i of shuffle([...Array(81).keys()], rand).slice(0, cfg.killerGivens)) puzzle[i] = solution[i];
+  for (let guard = 0; guard < 81; guard++) {
+    const fast = logicSolve(shape, puzzle, "full");
+    let stuckAt = fast.values;
+    if (fast.solved) {
+      const slow = solvableWithHints(shape, puzzle, solution);
+      if (slow.ok) return { puzzle, solution, cages, clues: puzzle.filter(Boolean).length };
+      stuckAt = slow.values;
+    }
+    // Give away one number where logic got stuck, then try again.
+    const open = stuckAt.map((v, i) => (v ? -1 : i)).filter(i => i >= 0);
+    const i = open[Math.floor(rand() * open.length)];
+    puzzle[i] = solution[i];
+  }
+  return { puzzle: solution.slice(), solution, cages, clues: 81 };
+}
+
+/* ---------- Hint text ---------- */
+const TECHNIQUES = {
+  lastCell:         { name: "Last empty cell", tip: "When a row, column or box has just one empty cell, it gets whichever number is missing." },
+  cageLast:         { name: "Last cell of a cage", tip: "When every cell of a cage but one is filled, the last cell is the cage total minus the numbers already in it." },
+  hiddenSingle:     { name: "Hidden single", tip: "Pick a number this area still needs and check each empty cell. If only one cell can take it, it goes there." },
+  nakedSingle:      { name: "Naked single", tip: "List the numbers that this cell can't be, because its row, column, box (or cage) already uses them. If only one number is left over, that's the answer." },
+  rule45:           { name: "Rule of 45", tip: "Every row, column and box adds up to 45 (1 + 2 + … + 9). Add up the cages that sit inside one. Whatever is left over from 45 belongs to the cells those cages don't cover. It works the other way round too, for a cell that pokes out." },
+  cageHiddenSingle: { name: "Only spot in a cage", tip: "If every possible combination for a cage includes a number, the cage must hold it. When only one of its cells can take that number, it goes there." },
+  cageCombo:        { name: "Cage combinations", tip: "List every set of different numbers with the right count that adds up to the cage total. A number that appears in none of those sets can't go anywhere in the cage." },
+  cagePointing:     { name: "Cage must contain", tip: "If every combination for a cage includes a number, the cage must hold it. If all the cage's spots for that number sit in one row, column or box, the number can't go anywhere else in that row, column or box." },
+  pointing:         { name: "Pointing", tip: "If all the spots for a number inside a box line up in one row or column, that number can't go anywhere else in that row or column." },
+  claiming:         { name: "Claiming", tip: "If all the spots for a number in a row or column are inside one box (or one shared row), that number can't go anywhere else in that box." },
+  nakedPair:        { name: "Naked pair", tip: "If two cells in an area can only hold the same two numbers, those two numbers belong to them. Cross them off everywhere else in the area." },
+  nakedTriple:      { name: "Naked triple", tip: "If three cells in an area can only hold the same three numbers between them, cross those numbers off the rest of the area." },
+  hiddenPair:       { name: "Hidden pair", tip: "If two numbers can only go in the same two cells of an area, those cells must hold them, so any other numbers in those cells can be crossed off." },
+  xWing:            { name: "X-Wing", tip: "If a number fits in exactly two spots in each of two rows, and the spots line up in the same two columns, cross it off the rest of those columns. (Works with rows and columns swapped too.)" },
+};
+
+const comboText = m => digitsIn(m).join(" + ");
+function combosText(combos) {
+  if (combos.length <= 4) return orList(combos.map(comboText));
+  return `one of ${combos.length} combinations, all using only ${andList(digitsIn(combos.reduce((a, m) => a | m, 0)))}`;
+}
+
+// Turn the engine's result into the pages the hint card shows.
+// Each page: { kicker, title, text, tip?, hl: { area, cause, elim, target, ghost } }
+function buildHintPages(shape, result, values) {
+  if (result.mistake !== undefined) {
+    const i = result.mistake;
+    return [{ kicker: "Hint", title: "Fix a mistake first",
+      text: `The <b>${values[i]}</b> in ${shape.cellName(i)} isn't right, and steps built on it could go wrong. Erase it, then ask for another hint.`,
+      hl: { elim: [i], target: i } }];
+  }
+  if (result.stuck) return [{ kicker: "Hint", title: "No simple step here", stuck: true,
+    text: "This position needs an advanced pattern that hints can't explain yet. Filling in notes for every empty cell often makes it easier to see. You can also reveal one cell.", hl: {} }];
+
+  const cand = candidatesFor(shape, values);
+  const all = [...result.steps, result.final];
+  const pages = [];
+  all.forEach((s, n) => {
+    pages.push(describeStep(shape, s, values, cand.slice(), n, all.length));
+    if (s.elims) s.elims.forEach(([i, d]) => (cand[i] &= ~BIT(d)));
+  });
+  return [nudgePage(shape, all[0], all.length), ...pages];
+}
+
+function nudgePage(shape, first, total) {
+  const t = TECHNIQUES[first.technique];
+  let where, area;
+  switch (first.technique) {
+    case "nakedSingle": where = `Look closely at ${shape.cellName(first.cell)}.`; area = [first.cell]; break;
+    case "pointing": case "claiming": where = `Look at ${shape.houseName(first.from)} and where each number could go.`; area = first.from.cells; break;
+    case "xWing": where = `Look at ${first.lines.map(h => shape.houseName(h)).join(" and ")}.`; area = first.area; break;
+    case "cageLast": case "cageHiddenSingle": case "cageCombo": case "cagePointing":
+      where = `Look at ${shape.cageName(first.cage)}.`; area = first.cage.cells; break;
+    case "rule45": where = `Look at ${shape.houseName(first.house)} and the cages around it.`; area = first.house.cells; break;
+    default: where = `Look at ${shape.houseName(first.house)}.`; area = first.house.cells;
+  }
+  const lead = total > 1 ? `Start with <b>${t.name}</b>. It rules out some numbers so that a placement appears.` : `Try <b>${t.name}</b>.`;
+  return { kicker: "Hint", title: "Where to look", text: `${where} ${lead}`, tip: t.tip, hl: { area } };
+}
+
+function describeStep(shape, s, values, cand, n, total) {
+  const t = TECHNIQUES[s.technique];
+  const kicker = total > 1 ? `Step ${n + 1} of ${total}` : "The step";
+  const ghostFor = (cells, d) => cells.map(i => [i, d, "cand"]);
+  const elimGhosts = s.elims ? s.elims.map(([i, d]) => [i, d, "x"]) : [];
+  const elimCells = s.elims ? [...new Set(s.elims.map(e => e[0]))] : [];
+  const name = h => shape.houseName(h);
+  const Name = h => capitalize(shape.houseName(h));
+  const earlier = `the earlier step${total > 2 ? "s" : ""}`;
+  const place = s.cell === undefined ? "" : `So <b>${s.digit}</b> goes in ${shape.cellName(s.cell)}. Tap the cell and place it yourself.`;
+  switch (s.technique) {
+    case "lastCell":
+      return { kicker, title: t.name, text: `${Name(s.house)} has only one empty cell, and the only number it's missing is ${s.digit}. ${place}`,
+        hl: { area: s.house.cells, target: s.cell } };
+    case "cageLast": {
+      const others = s.cage.cells.filter(i => i !== s.cell);
+      return { kicker, title: t.name, text: `${capitalize(shape.cageName(s.cage))}. Its other cells already hold ${andList(others.map(i => values[i]))}, and ${s.cage.sum} − ${others.map(i => values[i]).join(" − ")} = ${s.digit}. ${place}`,
+        hl: { area: s.cage.cells, cause: others, target: s.cell } };
+    }
+    case "hiddenSingle": {
+      const blockers = new Set(), ruledOut = [];
+      for (const i of s.house.cells) {
+        if (values[i] || i === s.cell) continue;
+        const p = shape.peers[i].find(p => values[p] === s.digit);
+        if (p !== undefined) blockers.add(p); else ruledOut.push([i, s.digit, "x"]);
+      }
+      const why = [];
+      if (blockers.size) why.push(`the highlighted ${s.digit}s already cover the other empty cells`);
+      if (ruledOut.length) why.push(`${earlier} crossed ${s.digit} off the rest`);
+      return { kicker, title: t.name, text: `${Name(s.house)} still needs a ${s.digit}, but ${andList(why)}. Only one cell is left for it. ${place}`,
+        hl: { area: s.house.cells, cause: [...blockers], target: s.cell, ghost: ruledOut } };
+    }
+    case "nakedSingle": {
+      const used = digitsIn(ALL_DIGITS & ~cand[s.cell]);
+      const seen = used.filter(d => shape.peers[s.cell].some(p => values[p] === d));
+      const viaSteps = used.filter(d => !seen.includes(d));
+      const cause = shape.peers[s.cell].filter(p => values[p] && seen.includes(values[p]));
+      let text = seen.length ? `The cells this one sees already contain ${andList(seen)}.` : "";
+      if (viaSteps.length) text += ` ${capitalize(earlier)} ruled out ${andList(viaSteps)}.`;
+      return { kicker, title: t.name, text: `${text.trim()} That leaves only ${s.digit}. ${place}`,
+        hl: { area: shape.peers[s.cell], cause, target: s.cell } };
+    }
+    case "rule45": {
+      const cagesTotal = s.cages.map(cg => cg.sum).join(" + ");
+      const known = s.others.map(i => values[i]);
+      const text = s.way === "in"
+        ? `${Name(s.house)} adds up to 45. The cages that sit completely inside it (green) add up to ${cagesTotal} = ${s.insideSum}, so the cells they don't cover add up to 45 − ${s.insideSum} = ${45 - s.insideSum}.${known.length ? ` The other leftover cells already hold ${andList(known)}, which leaves ${s.digit}.` : ""}`
+        : `${Name(s.house)} adds up to 45. The cages that cover it (green) add up to ${cagesTotal} = ${s.insideSum}, which is ${s.insideSum - 45} more than 45. That extra comes from the cells poking out of ${name(s.house)}.${known.length ? ` The others already hold ${andList(known)}, which leaves ${s.digit}.` : ""}`;
+      return { kicker, title: t.name, text: `${text} ${place}`,
+        hl: { area: s.house.cells, cause: s.cages.flatMap(cg => cg.cells).filter(i => i !== s.cell), target: s.cell } };
+    }
+    case "cageHiddenSingle":
+      return { kicker, title: t.name, text: `${capitalize(shape.cageName(s.cage))} can only be ${combosText(s.combos)}. Every option includes a ${s.digit}, and only one cell in the cage can still take it. ${place}`,
+        hl: { area: s.cage.cells, target: s.cell } };
+    case "cageCombo": {
+      const removed = digitsIn(s.elims.reduce((m, [, d]) => m | BIT(d), 0));
+      return { kicker, title: t.name, text: `${capitalize(shape.cageName(s.cage))}${s.filled ? ` (it already holds ${andList(digitsIn(s.filled))})` : ""} can only be ${combosText(s.combos)}. So ${andList(removed)} can be crossed off the cells shown in red.`,
+        tip: t.tip, hl: { area: s.cage.cells, elim: elimCells, ghost: elimGhosts } };
+    }
+    case "cagePointing":
+      return { kicker, title: t.name, text: `${capitalize(shape.cageName(s.cage))} can only be ${combosText(s.combos)}. Every option includes a ${s.digit}, and the cage's spots for it (green) are all in ${name(s.house)}. So ${s.digit} can be crossed off the rest of ${name(s.house)} (red).`,
+        tip: t.tip, hl: { area: s.cage.cells, cause: s.cause, elim: elimCells, ghost: [...ghostFor(s.cause, s.digit), ...elimGhosts] } };
+    case "pointing":
+    case "claiming":
+      return { kicker, title: t.name, text: `In ${name(s.from)}, the ${s.digit} can only go in the green cells, which are all in ${name(s.to)} too. So the ${s.digit} for ${name(s.to)} must be one of them, and ${s.digit} can be crossed off the rest of ${name(s.to)} (red).`,
+        tip: t.tip, hl: { area: s.from.cells, cause: s.cause, elim: elimCells, ghost: [...ghostFor(s.cause, s.digit), ...elimGhosts] } };
+    case "nakedPair":
+    case "nakedTriple": {
+      const nums = digitsIn(s.group);
+      const ghosts = s.cause.flatMap(i => digitsIn(cand[i]).map(d => [i, d, "cand"]));
+      return { kicker, title: t.name, text: `In ${name(s.house)}, the green cells can only hold ${andList(nums)} between them. Those numbers are taken, so ${andList(nums)} can be crossed off the other cells in ${name(s.house)} (red).`,
+        tip: t.tip, hl: { area: s.house.cells, cause: s.cause, elim: elimCells, ghost: [...ghosts, ...elimGhosts] } };
+    }
+    case "hiddenPair": {
+      const [a, b] = s.pair;
+      return { kicker, title: t.name, text: `In ${name(s.house)}, the ${a} and the ${b} can only go in the two green cells. Those cells must be ${a} and ${b}, so any other numbers in them can be crossed off.`,
+        tip: t.tip, hl: { area: s.house.cells, cause: s.cause, ghost: [...ghostFor(s.cause, a), ...ghostFor(s.cause, b), ...elimGhosts] } };
+    }
+    case "xWing":
+      return { kicker, title: t.name, text: `In ${s.lines.map(name).join(" and ")}, the ${s.digit} can only go in the four green corners, which line up in ${s.crossLines.map(name).join(" and ")}. Either way, those two lines get their ${s.digit} from the corners, so ${s.digit} can be crossed off the rest of them (red).`,
+        tip: t.tip, hl: { area: s.area, cause: s.cause, elim: elimCells, ghost: [...ghostFor(s.cause, s.digit), ...elimGhosts] } };
+  }
+}
+
+/* ---------- 3. Game state and rules ---------- */
+const DEFAULT_SETTINGS = { mistakeLimit: true, highlightSame: true, autoRemoveNotes: true, showTimer: true };
+let settings = Object.assign({}, DEFAULT_SETTINGS, store.get("qs-settings", {}));
+let stats = store.get("qs-stats", {});
+let dailyDone = store.get("qs-daily", {});
+let game = null;    // the game in progress, or null
+let shape = null;   // the board shape of that game (see section 2)
+let screen = "home";
+let selected = -1;
+let notesMode = false;
+let timerHandle = null;
+let lastVariant = store.get("qs-variant", "classic");
+const ZOOMS = [1, 1.5, 2, 2.5];
+let zoom = store.get("qs-zoom", 2);   // Samurai only: how far the board is zoomed in
+
+const MAX_MISTAKES = 3;
+let hintView = null;   // { pages, page } while the hint card is open
+let hintTipOpen = false;
+
+const variantOf = g => (g && g.variant) || "classic";
+function useGame(g) {
+  game = g;
+  shape = g ? shapeFor(variantOf(g), g.cages) : null;
+}
+useGame(store.get("qs-game", null));
+
+// Classic stats keep their original keys ("easy"...), so earlier stats still count.
+const statsKey = (variant, level) => (variant === "classic" ? level : `${variant}-${level}`);
+function levelStats(variant, level) {
+  const key = statsKey(variant, level);
+  if (!stats[key]) stats[key] = { played: 0, won: 0, best: null, totalTime: 0, noMistakeWins: 0 };
+  return stats[key];
+}
+const gameLabel = g => (variantOf(g) === "classic" ? "" : VARIANTS[variantOf(g)].label + " · ") + LEVELS[g.level].label;
+function saveGame() { if (game && !game.finished) store.set("qs-game", game); else store.remove("qs-game"); }
+
+function newGame(variant, level, daily) {
+  showLoading();
+  // Let the "Making your puzzle" message paint before the generator runs.
+  setTimeout(() => {
+    const rand = daily ? seededRandom(hashString("quiet-sudoku-" + daily)) : Math.random;
+    const { puzzle, solution, cages } = generatePuzzle(variant, level, rand);
+    useGame({
+      variant, level, daily: daily || null, puzzle, solution, cages,
+      values: puzzle.slice(),
+      notes: new Array(puzzle.length).fill(0),     // bit d set = note d shown
+      mistakes: 0, hintsUsed: 0, elapsed: 0,
+      paused: false, finished: false, lost: false, history: [],
+    });
+    levelStats(variant, level).played++;
+    store.set("qs-stats", stats);
+    selected = puzzle.indexOf(0);
+    notesMode = false;
+    saveGame();
+    showGame();
+  }, 30);
+}
+
+const isGiven = i => game.puzzle[i] !== 0;
+const isCorrect = i => game.values[i] !== 0 && game.values[i] === game.solution[i];
+const isLocked = i => isGiven(i) || isCorrect(i);
+
+function remember(i, extra) {
+  game.history.push({ i, value: game.values[i], notes: game.notes[i], peerNotes: extra || [] });
+  if (game.history.length > 300) game.history.shift();
+}
+
+function enterDigit(d) {
+  if (!game || game.finished || game.paused || selected < 0 || isLocked(selected)) return;
+  const i = selected;
+  if (notesMode) {
+    if (game.values[i]) return;  // notes only go in empty cells
+    remember(i);
+    game.notes[i] ^= 1 << d;
+    afterMove();
+    return;
+  }
+  if (game.values[i] === d) return;
+  const correct = d === game.solution[i];
+  // Remember which neighbours' notes we're about to clear, so Undo can bring them back.
+  const cleared = [];
+  if (correct && settings.autoRemoveNotes) {
+    for (const p of shape.peers[i]) if (game.notes[p] & (1 << d)) cleared.push([p, game.notes[p]]);
+  }
+  remember(i, cleared);
+  game.values[i] = d;
+  game.notes[i] = 0;
+  cleared.forEach(([p]) => (game.notes[p] &= ~(1 << d)));
+  popCell = i;
+  if (correct) {
+    flashCompleted(i);
+    if (game.values.every((v, k) => v === game.solution[k])) return win();
+  } else {
+    game.mistakes++;
+    if (settings.mistakeLimit && game.mistakes >= MAX_MISTAKES) {
+      game.lost = true;
+      afterMove();
+      return openGameOver();
+    }
+  }
+  afterMove();
+}
+
+function erase() {
+  if (!game || game.finished || game.paused || selected < 0 || isLocked(selected)) return;
+  const i = selected;
+  if (!game.values[i] && !game.notes[i]) return;
+  remember(i);
+  game.values[i] = 0;
+  game.notes[i] = 0;
+  afterMove();
+}
+
+function undo() {
+  if (!game || game.finished || game.paused) return;
+  const step = game.history.pop();
+  if (!step) return toast("Nothing to undo");
+  game.values[step.i] = step.value;
+  game.notes[step.i] = step.notes;
+  step.peerNotes.forEach(([p, n]) => (game.notes[p] = n));
+  selected = step.i;
+  afterMove();
+  scrollToCells([selected]);
+}
+
+// Open the hint coach: it explains the next logical step without filling anything in.
+function openHint() {
+  if (!game || game.finished || game.paused) return;
+  const pages = buildHintPages(shape, findHint(shape, game.values, game.solution), game.values);
+  game.hintsUsed = (game.hintsUsed || 0) + 1;
+  hintView = { pages, page: 0 };
+  saveGame();
+  renderTools(); renderBoard();
+  scrollToHint();
+}
+function closeHint() { hintView = null; renderTools(); renderBoard(); }
+function showHintPage(n) {
+  hintView.page = n;
+  // On the last page, select the cell to fill so the player can tap the number right away.
+  const hl = hintView.pages[n].hl;
+  if (n === hintView.pages.length - 1 && hl.target !== undefined) selected = hl.target;
+  renderTools(); renderBoard();
+  scrollToHint();
+}
+function scrollToHint() {
+  const hl = hintView.pages[hintView.page].hl;
+  scrollToCells(hl.target !== undefined ? [hl.target] : [...(hl.cause || []), ...(hl.elim || [])].length ? [...(hl.cause || []), ...(hl.elim || [])] : hl.area || []);
+}
+
+// Last resort when no explainable step exists: reveal one cell.
+function revealCell() {
+  if (!game || game.finished || game.paused) return;
+  let i = selected;
+  if (i < 0 || isLocked(i)) {
+    const open = [...Array(shape.size).keys()].filter(k => !isLocked(k));
+    if (!open.length) return;
+    i = open[Math.floor(Math.random() * open.length)];
+  }
+  const d = game.solution[i];
+  game.values[i] = d;
+  game.notes[i] = 0;
+  if (settings.autoRemoveNotes) for (const p of shape.peers[i]) game.notes[p] &= ~(1 << d);
+  // A revealed cell is permanent, so drop older undo steps for it.
+  game.history = game.history.filter(h => h.i !== i);
+  selected = i;
+  popCell = i;
+  flashCompleted(i);
+  if (game.values.every((v, k) => v === game.solution[k])) return win();
+  afterMove();
+  scrollToCells([i]);
+}
+
+function toggleNotes() { notesMode = !notesMode; renderTools(); renderPad(); }
+
+function togglePause(force) {
+  if (!game || game.finished) return;
+  game.paused = typeof force === "boolean" ? force : !game.paused;
+  saveGame();
+  renderInfo();
+  renderBoard();
+}
+
+function afterMove() {
+  const hadHint = !!hintView;
+  hintView = null;   // any move closes the hint
+  saveGame(); renderBoard(); renderInfo(); renderPad();
+  if (hadHint) renderTools();
+}
+
+// When a row, column, box or cage is finished, give it a short wave of colour.
+let flashCells = [];
+let popCell = -1;
+function flashCompleted(i) {
+  const groups = shape.cellHouses[i].map(h => h.cells);
+  if (shape.cageOf[i]) groups.push(shape.cageOf[i].cells);
+  for (const cells of groups) {
+    if (cells.every(isCorrect)) cells.forEach((k, order) => flashCells.push([k, order]));
+  }
+}
+
+function win() {
+  game.finished = true;
+  if (hintView) { hintView = null; renderTools(); }
+  stopTimer();
+  const s = levelStats(variantOf(game), game.level);
+  s.won++;
+  s.totalTime += game.elapsed;
+  const newBest = s.best === null || game.elapsed < s.best;
+  if (newBest) s.best = game.elapsed;
+  if (game.mistakes === 0) s.noMistakeWins++;
+  store.set("qs-stats", stats);
+  if (game.daily) { dailyDone[game.daily] = game.elapsed; store.set("qs-daily", dailyDone); }
+  saveGame();
+  renderBoard(); renderInfo(); renderPad();
+  // Ripple across the whole board, then show the result.
+  const span = shape.rows + shape.cols;
+  for (let i = 0; i < shape.size; i++) {
+    cellEls[i].style.animationDelay = Math.round((shape.pos[i].r + shape.pos[i].c) / span * 720) + "ms";
+    cellEls[i].classList.add("flash");
+  }
+  setTimeout(() => openWin(newBest), 900);
+}
+
+/* Timer: counts only while the game screen is open, unpaused and the tab is visible. */
+function startTimer() {
+  stopTimer();
+  timerHandle = setInterval(() => {
+    if (!game || game.paused || game.finished || game.lost || screen !== "game" || document.hidden) return;
+    if (document.getElementById("layer").childElementCount) return; // a sheet is open
+    game.elapsed++;
+    if (game.elapsed % 5 === 0) saveGame();
+    const t = document.getElementById("time");
+    if (t) t.textContent = formatTime(game.elapsed);
+  }, 1000);
+}
+function stopTimer() { if (timerHandle) clearInterval(timerHandle); timerHandle = null; }
+
+/* ---------- 4. Drawing the screens ---------- */
+const ICONS = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  erase: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H9L4 15a2 2 0 0 1 0-2.8L13.2 3a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 19"/><path d="M8 10l6 6"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.2-6.5a1 1 0 0 0 0-1.7L9.5 4.6A1 1 0 0 0 8 5.5z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>',
+};
+
+const app = document.getElementById("app");
+const layer = document.getElementById("layer");
+
+function showLoading() {
+  screen = "loading";
+  app.innerHTML = `<div class="topbar"><span class="spacer"></span><h1>Quiet Sudoku</h1><span class="spacer"></span></div>
+    <div class="loading">Making your puzzle…</div>`;
+}
+
+function brandMark() {
+  // A tiny 3x3 board as the logo, drawn with the page's own colours.
+  const filled = { 0: 5, 4: 9, 8: 1, 2: 3, 6: 7 };
+  let cells = "";
+  for (let k = 0; k < 9; k++) {
+    const x = 6 + (k % 3) * 27, y = 6 + Math.floor(k / 3) * 27;
+    const hit = k === 4;
+    cells += `<rect x="${x}" y="${y}" width="25" height="25" rx="4" fill="${hit ? "var(--accent)" : "var(--surface)"}"/>`;
+    if (filled[k]) cells += `<text x="${x + 12.5}" y="${y + 18}" text-anchor="middle" font-family="Lexend, sans-serif" font-size="15" font-weight="${hit ? 600 : 400}" fill="${hit ? "var(--accent-ink)" : "var(--ink)"}">${filled[k]}</text>`;
+  }
+  return `<svg class="brand-mark" viewBox="0 0 92 92" aria-hidden="true"><rect x="2" y="2" width="88" height="88" rx="14" fill="var(--line-bold)"/>${cells}</svg>`;
+}
+
+function showHome() {
+  screen = "home";
+  stopTimer();
+  const inProgress = game && !game.finished && !game.lost;
+  const today = todayKey();
+  const dailyTime = dailyDone[today];
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="to-games" aria-label="Back to all games">${ICONS.back}</button><span></span>
+      <button class="icon-btn" id="open-settings" aria-label="Settings">${ICONS.gear}</button></div>
+    <div class="home">
+      <div class="brand">
+        ${brandMark()}
+        <h2>Quiet Sudoku</h2>
+        <p>No ads, no pop-ups. Just the puzzle.</p>
+      </div>
+      <div class="menu">
+        ${inProgress ? `<button class="btn primary" id="continue"><span class="btn-col">Continue
+            <span class="sub">${gameLabel(game)}${game.daily ? " · Daily" : ""} · ${formatTime(game.elapsed)}</span></span></button>` : ""}
+        <button class="btn ${inProgress ? "" : "primary"}" id="new">${ICONS.plus} New game</button>
+        <button class="btn" id="daily">${ICONS.calendar}<span class="btn-col">Daily puzzle
+            ${dailyTime != null ? `<span class="daily-done">Solved today in ${formatTime(dailyTime)}</span>` : `<span class="sub">${new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</span>`}</span></button>
+        <button class="btn" id="stats">${ICONS.chart} Statistics</button>
+      </div>
+    </div>`;
+  document.getElementById("open-settings").onclick = openSettings;
+  document.getElementById("to-games").onclick = () => { location.href = "index.html"; };
+  document.getElementById("new").onclick = () => openNewGame();
+  document.getElementById("daily").onclick = startDaily;
+  document.getElementById("stats").onclick = () => openStats();
+  if (inProgress) document.getElementById("continue").onclick = () => { game.paused = false; showGame(); };
+}
+
+function startDaily() {
+  const today = todayKey();
+  if (game && game.daily === today && !game.finished && !game.lost) { game.paused = false; return showGame(); }
+  if (dailyDone[today] != null) return toast("You already solved today's puzzle. See you tomorrow!");
+  confirmReplace(() => newGame("classic", "medium", today));
+}
+
+// Box lines and Killer cage outlines, drawn in board units (1 unit = 1 cell).
+function boardLines() {
+  const { pos, boxOf, cageOf, cellAt } = shape;
+  let boxPath = "", cagePath = "";
+  const inset = 0.12;
+  for (let i = 0; i < shape.size; i++) {
+    const { r, c } = pos[i];
+    const at = (dr, dc) => cellAt(r + dr, c + dc);
+    const sameBox = j => j !== undefined && boxOf[j] === boxOf[i];
+    if (!sameBox(at(-1, 0))) boxPath += `M${c} ${r}H${c + 1}`;
+    if (!sameBox(at(0, -1))) boxPath += `M${c} ${r}V${r + 1}`;
+    if (at(1, 0) === undefined) boxPath += `M${c} ${r + 1}H${c + 1}`;
+    if (at(0, 1) === undefined) boxPath += `M${c + 1} ${r}V${r + 1}`;
+    if (!cageOf[i]) continue;
+    const same = j => j !== undefined && cageOf[j] === cageOf[i];
+    const T = !same(at(-1, 0)), B = !same(at(1, 0)), L = !same(at(0, -1)), R = !same(at(0, 1));
+    const x0 = c + inset, x1 = c + 1 - inset, y0 = r + inset, y1 = r + 1 - inset;
+    if (T) cagePath += `M${L ? x0 : c} ${y0}H${R ? x1 : c + 1}`;
+    if (B) cagePath += `M${L ? x0 : c} ${y1}H${R ? x1 : c + 1}`;
+    if (L) cagePath += `M${x0} ${T ? y0 : r}V${B ? y1 : r + 1}`;
+    if (R) cagePath += `M${x1} ${T ? y0 : r}V${B ? y1 : r + 1}`;
+    // Inside corners, where the cage turns around a cell that isn't part of it.
+    if (!T && !L && !same(at(-1, -1))) cagePath += `M${c} ${y0}H${x0}V${r}`;
+    if (!T && !R && !same(at(-1, 1))) cagePath += `M${c + 1} ${y0}H${x1}V${r}`;
+    if (!B && !L && !same(at(1, -1))) cagePath += `M${c} ${y1}H${x0}V${r + 1}`;
+    if (!B && !R && !same(at(1, 1))) cagePath += `M${c + 1} ${y1}H${x1}V${r + 1}`;
+  }
+  return `<svg class="lines" viewBox="0 0 ${shape.cols} ${shape.rows}" preserveAspectRatio="none" aria-hidden="true">
+    <path class="cage-line" d="${cagePath}"/><path class="box-line" d="${boxPath}"/></svg>`;
+}
+
+let cellEls = [], digitEls = [], noteEls = [];
+
+function showGame() {
+  screen = "game";
+  hintView = null;
+  closeSheet();
+  let cells = "";
+  for (let i = 0; i < shape.size; i++) {
+    const { r, c } = shape.pos[i];
+    const cg = shape.cageOf[i];
+    const sum = cg && cg.cells[0] === i ? `<span class="cage-sum">${cg.sum}</span>` : "";
+    cells += `<div class="cell${sum ? " has-sum" : ""}" data-i="${i}" style="grid-row:${r + 1};grid-column:${c + 1}" role="gridcell" aria-label="${shape.cellName(i)}">${sum}<span class="digit"></span><div class="notes">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<span>${n}</span>`).join("")}</div></div>`;
+  }
+  const zoomable = shape.samurai;
+  app.innerHTML = `
+    <div class="topbar">
+      <button class="icon-btn" id="home" aria-label="Back to home">${ICONS.back}</button>
+      <h1>${VARIANTS[variantOf(game)].title}</h1>
+      <button class="icon-btn" id="open-settings" aria-label="Settings">${ICONS.gear}</button>
+    </div>
+    <div class="info" id="info"></div>
+    <div class="board-wrap">
+      <div class="board-scroll${zoomable ? " zoomable" : ""}" id="board-scroll">
+        <div class="board" id="board" role="grid" aria-label="Sudoku board" style="--cols:${shape.cols};--rows:${shape.rows};${zoomable ? `width:${zoom * 100}%` : ""}">${cells}${boardLines()}</div>
+      </div>
+      <div class="pause-cover" id="pause-cover" hidden><button id="resume" aria-label="Resume">${ICONS.play}</button></div>
+    </div>
+    ${zoomable ? `<div class="zoom"><span>Drag to move around</span><button id="zoom-out" aria-label="Zoom out">${ICONS.minus}</button><button id="zoom-in" aria-label="Zoom in">${ICONS.plus}</button></div>` : ""}
+    <div class="tools" id="tools"></div>
+    <div class="pad" id="pad"></div>`;
+  cellEls = new Array(shape.size); digitEls = new Array(shape.size); noteEls = new Array(shape.size);
+  app.querySelectorAll(".cell").forEach(el => {
+    const i = +el.dataset.i;
+    cellEls[i] = el; digitEls[i] = el.querySelector(".digit"); noteEls[i] = el.querySelector(".notes").children;
+  });
+  // "click" rather than "pointerdown", so dragging to scroll a Samurai board doesn't select cells.
+  document.getElementById("board").addEventListener("click", e => {
+    const el = e.target.closest(".cell");
+    if (!el || game.paused) return;
+    selected = +el.dataset.i;
+    renderBoard();
+  });
+  document.getElementById("home").onclick = () => { saveGame(); showHome(); };
+  document.getElementById("open-settings").onclick = openSettings;
+  document.getElementById("resume").onclick = () => togglePause(false);
+  if (zoomable) {
+    document.getElementById("zoom-in").onclick = () => setZoom(1);
+    document.getElementById("zoom-out").onclick = () => setZoom(-1);
+    updateZoomButtons();
+  }
+  renderInfo(); renderBoard(); renderTools(); renderPad();
+  if (selected >= 0 && selected < shape.size) requestAnimationFrame(() => scrollToCells([selected], true));
+  startTimer();
+}
+
+function setZoom(step) {
+  const sc = document.getElementById("board-scroll"), board = document.getElementById("board");
+  const k = Math.max(0, Math.min(ZOOMS.length - 1, ZOOMS.indexOf(zoom) + step));
+  if (ZOOMS[k] === zoom) return;
+  // Keep the middle of the view in the middle while zooming.
+  const cx = (sc.scrollLeft + sc.clientWidth / 2) / sc.scrollWidth, cy = (sc.scrollTop + sc.clientHeight / 2) / sc.scrollHeight;
+  zoom = ZOOMS[k];
+  store.set("qs-zoom", zoom);
+  board.style.width = zoom * 100 + "%";
+  sc.scrollLeft = cx * sc.scrollWidth - sc.clientWidth / 2;
+  sc.scrollTop = cy * sc.scrollHeight - sc.clientHeight / 2;
+  updateZoomButtons();
+}
+function updateZoomButtons() {
+  document.getElementById("zoom-out").disabled = zoom === ZOOMS[0];
+  document.getElementById("zoom-in").disabled = zoom === ZOOMS[ZOOMS.length - 1];
+}
+
+// Samurai: scroll the zoomed board so these cells are in view.
+function scrollToCells(list, instant) {
+  const sc = document.getElementById("board-scroll");
+  if (!sc || !shape || !shape.samurai || !list.length) return;
+  const w = sc.scrollWidth / shape.cols, h = sc.scrollHeight / shape.rows;
+  const rs = list.map(i => shape.pos[i].r), cs = list.map(i => shape.pos[i].c);
+  const top = Math.min(...rs) * h, bottom = (Math.max(...rs) + 1) * h, left = Math.min(...cs) * w, right = (Math.max(...cs) + 1) * w;
+  const visible = top >= sc.scrollTop && bottom <= sc.scrollTop + sc.clientHeight && left >= sc.scrollLeft && right <= sc.scrollLeft + sc.clientWidth;
+  if (visible) return;
+  sc.scrollTo({ left: (left + right - sc.clientWidth) / 2, top: (top + bottom - sc.clientHeight) / 2, behavior: instant ? "auto" : "smooth" });
+}
+
+function renderInfo() {
+  const el = document.getElementById("info");
+  if (!el) return;
+  const limitText = settings.mistakeLimit ? `${game.mistakes}/${MAX_MISTAKES}` : `${game.mistakes}`;
+  el.innerHTML = `
+    <div><span class="label">${game.daily ? "Daily" : "Level"}</span><span class="value">${LEVELS[game.level].label}</span></div>
+    <div><span class="label">Mistakes</span><span class="value ${game.mistakes ? "bad" : ""}">${limitText}</span></div>
+    <div>${settings.showTimer ? `<span class="label">Time</span>` : `<span class="label">&nbsp;</span>`}
+      <span class="timer">${settings.showTimer ? `<span class="value" id="time">${formatTime(game.elapsed)}</span>` : ""}
+      ${game.finished ? "" : `<button class="pause-btn" id="pause" aria-label="${game.paused ? "Resume" : "Pause"}">${game.paused ? ICONS.play : ICONS.pause}</button>`}</span></div>`;
+  const p = document.getElementById("pause");
+  if (p) p.onclick = () => togglePause();
+}
+
+function renderBoard() {
+  const board = document.getElementById("board");
+  if (!board) return;
+  board.classList.toggle("paused", game.paused);
+  document.getElementById("pause-cover").hidden = !game.paused;
+  const sel = selected;
+  const selDigit = sel >= 0 ? game.values[sel] : 0;
+  const peers = new Set(sel >= 0 ? shape.housePeers[sel] : []);
+  // Cells whose digit clashes with a wrong entry get a red tint.
+  const conflict = new Set();
+  for (let i = 0; i < shape.size; i++) {
+    const v = game.values[i];
+    if (v && v !== game.solution[i]) for (const p of shape.peers[i]) if (game.values[p] === v) conflict.add(p);
+  }
+  for (let i = 0; i < shape.size; i++) {
+    const el = cellEls[i];
+    const v = game.values[i];
+    const wrong = v && v !== game.solution[i];
+    const same = settings.highlightSame && selDigit && v === selDigit && i !== sel;
+    el.className = "cell" + (shape.cageOf[i] && shape.cageOf[i].cells[0] === i ? " has-sum" : "")
+      + (isGiven(i) ? " given" : v ? " entered" : "") + (wrong ? " wrong" : "")
+      + (peers.has(i) ? " peer" : "") + (same ? " same" : "") + (conflict.has(i) ? " conflict" : "") + (i === sel ? " selected" : "");
+    el.style.animationDelay = "";
+    digitEls[i].textContent = v || "";
+    const notes = v ? 0 : game.notes[i];
+    for (let d = 1; d <= 9; d++) {
+      const on = (notes >> d) & 1;
+      noteEls[i][d - 1].className = on ? (settings.highlightSame && selDigit === d ? "on match" : "on") : "";
+    }
+  }
+  if (hintView) {
+    const hl = hintView.pages[hintView.page].hl;
+    const add = (list, cls) => (list || []).forEach(i => cellEls[i].classList.add(cls));
+    for (const i of hl.area || []) cellEls[i].classList.remove("peer", "same", "selected");
+    add(hl.area, "hint-area"); add(hl.cause, "hint-cause"); add(hl.elim, "hint-elim");
+    if (hl.target !== undefined) cellEls[hl.target].classList.add("hint-target");
+    // Show the pencil marks the explanation talks about, even if the player hasn't written them.
+    const ghostCells = new Set((hl.ghost || []).map(g => g[0]));
+    for (const i of ghostCells) for (const span of noteEls[i]) span.className = "";
+    for (const [i, d, kind] of hl.ghost || []) {
+      if (!game.values[i]) noteEls[i][d - 1].className = kind === "x" ? "ghost-x" : "ghost";
+    }
+  }
+  if (popCell >= 0) { cellEls[popCell].classList.add("pop"); popCell = -1; }
+  for (const [k, order] of flashCells) {
+    const el = cellEls[k];
+    el.style.animationDelay = order * 35 + "ms";
+    el.classList.add("flash");
+  }
+  flashCells = [];
+}
+
+function renderTools() {
+  const el = document.getElementById("tools");
+  if (!el) return;
+  if (hintView) return renderHintCard(el);
+  el.className = "tools";
+  el.innerHTML = `
+    <button class="tool" id="t-undo"><span class="ico">${ICONS.undo}</span>Undo</button>
+    <button class="tool" id="t-erase"><span class="ico">${ICONS.erase}</span>Erase</button>
+    <button class="tool ${notesMode ? "on" : ""}" id="t-notes" aria-pressed="${notesMode}"><span class="ico">${ICONS.pencil}<span class="badge">${notesMode ? "ON" : "OFF"}</span></span>Notes</button>
+    <button class="tool" id="t-hint"><span class="ico">${ICONS.bulb}</span>Hint</button>`;
+  document.getElementById("t-undo").onclick = undo;
+  document.getElementById("t-erase").onclick = erase;
+  document.getElementById("t-notes").onclick = toggleNotes;
+  document.getElementById("t-hint").onclick = openHint;
+}
+
+function renderHintCard(el) {
+  const { pages, page } = hintView;
+  const p = pages[page];
+  const last = page === pages.length - 1;
+  el.className = "";
+  el.innerHTML = `<div class="hint-card" role="region" aria-live="polite" aria-label="Hint">
+    <div class="hint-head"><span class="hint-kicker">${p.kicker}</span>
+      <button class="hint-close" id="h-close" aria-label="Close hint">${ICONS.close}</button></div>
+    <h4>${p.title}</h4>
+    <p>${p.text}</p>
+    ${!p.tip ? "" : page === 0 ? `<p class="tip">${p.tip}</p>`
+      : `<details id="h-tip" ${hintTipOpen ? "open" : ""}><summary>How this technique works</summary><p>${p.tip}</p></details>`}
+    <div class="hint-actions">
+      ${page > 0 ? `<button id="h-back">Back</button>` : ""}
+      ${p.stuck ? `<button class="primary" id="h-reveal">Reveal one cell</button>`
+        : last ? `<button class="primary" id="h-done">Got it</button>`
+        : `<button class="primary" id="h-next">${page === 0 ? "Explain the step" : "Next"}</button>`}
+    </div></div>`;
+  el.querySelector("#h-close").onclick = closeHint;
+  el.querySelector("#h-tip")?.addEventListener("toggle", e => (hintTipOpen = e.target.open));
+  el.querySelector("#h-back")?.addEventListener("click", () => showHintPage(page - 1));
+  el.querySelector("#h-next")?.addEventListener("click", () => showHintPage(page + 1));
+  el.querySelector("#h-done")?.addEventListener("click", closeHint);
+  el.querySelector("#h-reveal")?.addEventListener("click", () => { hintView = null; renderTools(); revealCell(); });
+}
+
+function renderPad() {
+  const el = document.getElementById("pad");
+  if (!el) return;
+  el.classList.toggle("notes-mode", notesMode);
+  const total = new Array(10).fill(0), placed = new Array(10).fill(0);
+  for (let i = 0; i < shape.size; i++) {
+    total[game.solution[i]]++;
+    if (game.values[i] === game.solution[i]) placed[game.solution[i]]++;
+  }
+  let html = "";
+  for (let d = 1; d <= 9; d++) {
+    const left = total[d] - placed[d];
+    html += `<button class="num ${left ? "" : "used-up"}" data-d="${d}" aria-label="${d}, ${left} left"><span class="n">${d}</span><span class="left">${left}</span></button>`;
+  }
+  el.innerHTML = html;
+  el.querySelectorAll(".num").forEach(b => (b.onclick = () => enterDigit(+b.dataset.d)));
+}
+
+/* ---------- 5. Pop-up sheets ---------- */
+function openSheet(html, onReady, dismissable = true) {
+  layer.innerHTML = `<div class="overlay" id="overlay"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const overlay = document.getElementById("overlay");
+  if (dismissable) overlay.addEventListener("click", e => { if (e.target === overlay) closeSheet(); });
+  overlay.dataset.dismissable = dismissable ? "1" : "";
+  if (onReady) onReady(overlay);
+}
+function closeSheet() { layer.innerHTML = ""; }
+
+function confirmReplace(start) {
+  if (!(game && !game.finished && !game.lost)) return start();
+  openSheet(`<h3>Start a new game?</h3>
+    <p>Your current ${gameLabel(game)} game (${formatTime(game.elapsed)}) will be lost.</p>
+    <button class="btn primary" id="yes">Start new game</button>
+    <button class="btn" id="no">Keep playing</button>`, o => {
+      o.querySelector("#yes").onclick = () => { closeSheet(); start(); };
+      o.querySelector("#no").onclick = () => { closeSheet(); if (screen === "home") { game.paused = false; showGame(); } };
+    });
+}
+
+const variantTabs = (current, attr) => `<div class="tabs three" role="tablist">${Object.entries(VARIANTS).map(([k, v]) =>
+  `<button role="tab" aria-selected="${k === current}" data-${attr}="${k}" class="${k === current ? "on" : ""}">${v.label}</button>`).join("")}</div>`;
+
+function openNewGame(variant = lastVariant) {
+  lastVariant = variant;
+  store.set("qs-variant", variant);
+  openSheet(`<h3>New game</h3>
+    ${variantTabs(variant, "variant")}
+    <p class="mode-blurb">${VARIANTS[variant].blurb}.</p>
+    <div class="choice-list">${Object.entries(LEVELS).map(([key, l]) =>
+      `<button class="btn" data-level="${key}"><span>${l.label}</span><span class="hint-text">${l.blurb}</span></button>`).join("")}</div>`,
+    o => {
+      o.querySelectorAll("[data-variant]").forEach(b => (b.onclick = () => openNewGame(b.dataset.variant)));
+      o.querySelectorAll("[data-level]").forEach(b => (b.onclick = () => {
+        closeSheet();
+        confirmReplace(() => newGame(variant, b.dataset.level, null));
+      }));
+    });
+}
+
+function openWin(newBest) {
+  const s = levelStats(variantOf(game), game.level);
+  openSheet(`<span class="win-mark">Solved</span>
+    <h3>${game.mistakes === 0 ? "Flawless." : "Nicely done."}</h3>
+    <div class="result-grid">
+      <div><b>${formatTime(game.elapsed)}</b><span>Time</span></div>
+      <div><b>${formatTime(s.best)}</b><span>${newBest ? "New best" : "Best"}</span></div>
+      <div><b>${game.mistakes}</b><span>Mistakes</span></div>
+    </div>
+    <p>${gameLabel(game)}${game.daily ? " daily puzzle" : ""} · ${game.hintsUsed ? `${game.hintsUsed} hint${game.hintsUsed > 1 ? "s" : ""} used` : "no hints"} · ${s.won} solved at this level</p>
+    <button class="btn primary" id="again">New game</button>
+    <button class="btn" id="go-home">Home</button>`, o => {
+      o.querySelector("#again").onclick = () => openNewGame(variantOf(game));
+      o.querySelector("#go-home").onclick = () => { closeSheet(); showHome(); };
+    }, false);
+}
+
+function openGameOver() {
+  openSheet(`<h3>That's ${MAX_MISTAKES} mistakes</h3>
+    <p>You can keep going with one more chance. No video to watch.</p>
+    <button class="btn primary" id="second">Second chance</button>
+    <button class="btn" id="again">New game</button>
+    <button class="btn" id="go-home">Home</button>`, o => {
+      o.querySelector("#second").onclick = () => {
+        game.mistakes = MAX_MISTAKES - 1;
+        game.lost = false;
+        closeSheet(); afterMove();
+      };
+      o.querySelector("#again").onclick = () => { game.lost = true; game.finished = true; saveGame(); openNewGame(variantOf(game)); };
+      o.querySelector("#go-home").onclick = () => { game.finished = true; saveGame(); closeSheet(); showHome(); };
+    }, false);
+}
+
+function openStats(variant, level) {
+  variant = variant || store.get("qs-stats-variant", "classic");
+  level = level || store.get("qs-stats-tab", "easy");
+  store.set("qs-stats-variant", variant);
+  store.set("qs-stats-tab", level);
+  const s = levelStats(variant, level);
+  const rate = s.played ? Math.round((s.won / s.played) * 100) + "%" : "–";
+  const avg = s.won ? formatTime(Math.round(s.totalTime / s.won)) : "–";
+  openSheet(`<h3>Statistics</h3>
+    ${variantTabs(variant, "svariant")}
+    <div class="tabs">${Object.entries(LEVELS).map(([k, l]) => `<button data-tab="${k}" class="${k === level ? "on" : ""}">${l.label}</button>`).join("")}</div>
+    <div class="stat-list">
+      <div class="stat-row"><span>Games started</span><b>${s.played}</b></div>
+      <div class="stat-row"><span>Games solved</span><b>${s.won}</b></div>
+      <div class="stat-row"><span>Win rate</span><b>${rate}</b></div>
+      <div class="stat-row"><span>Solved with no mistakes</span><b>${s.noMistakeWins}</b></div>
+      <div class="stat-row"><span>Best time</span><b>${s.best != null ? formatTime(s.best) : "–"}</b></div>
+      <div class="stat-row"><span>Average time</span><b>${avg}</b></div>
+    </div>
+    <button class="btn" id="close">Close</button>`, o => {
+      o.querySelectorAll("[data-svariant]").forEach(b => (b.onclick = () => openStats(b.dataset.svariant, level)));
+      o.querySelectorAll("[data-tab]").forEach(b => (b.onclick = () => openStats(variant, b.dataset.tab)));
+      o.querySelector("#close").onclick = closeSheet;
+    });
+}
+
+function openSettings() {
+  const rows = [
+    ["mistakeLimit", "Mistake limit", `The game stops after ${MAX_MISTAKES} wrong numbers`],
+    ["highlightSame", "Highlight matching numbers", "Shade every cell with the selected number"],
+    ["autoRemoveNotes", "Clear notes automatically", "Placing a number removes it from nearby notes"],
+    ["showTimer", "Show timer", "Time still counts toward your stats"],
+  ];
+  openSheet(`<h3>Settings</h3>
+    <div>${rows.map(([key, title, help]) => `
+      <label class="setting" for="set-${key}"><span class="txt">${title}<small>${help}</small></span>
+        <span class="switch"><input type="checkbox" id="set-${key}" data-key="${key}" ${settings[key] ? "checked" : ""}><span class="track"></span></span></label>`).join("")}
+    </div>
+    <button class="btn" id="close">Done</button>`, o => {
+      o.querySelectorAll("input[data-key]").forEach(input => (input.onchange = () => {
+        settings[input.dataset.key] = input.checked;
+        store.set("qs-settings", settings);
+        if (screen === "game") { renderInfo(); renderBoard(); }
+      }));
+      o.querySelector("#close").onclick = closeSheet;
+    });
+}
+
+let toastTimer = null;
+function toast(message) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.setAttribute("role", "status");
+  t.textContent = message;
+  document.body.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------- 6. Keyboard + startup ---------- */
+document.addEventListener("keydown", e => {
+  if (layer.childElementCount) {
+    if (e.key === "Escape" && document.getElementById("overlay")?.dataset.dismissable) closeSheet();
+    return;
+  }
+  if (screen !== "game" || !game) return;
+  const k = e.key;
+  if (k >= "1" && k <= "9") { enterDigit(+k); return; }
+  if (k === "Backspace" || k === "Delete" || k === "0") { erase(); e.preventDefault(); return; }
+  if (k === "n" || k === "N") { toggleNotes(); return; }
+  if (k === "z" || k === "Z") { undo(); e.preventDefault(); return; }
+  if (k === "h" || k === "H") { hintView ? closeHint() : openHint(); return; }
+  if (k === "Escape" && hintView) { closeHint(); return; }
+  if (k === " " || k === "p" || k === "P") { togglePause(); e.preventDefault(); return; }
+  const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  if (moves[k] && !game.paused) {
+    e.preventDefault();
+    if (selected < 0) selected = 0;
+    else {
+      // Step in that direction, wrapping around and skipping the gaps in a Samurai board.
+      const [dr, dc] = moves[k];
+      let { r, c } = shape.pos[selected];
+      for (let n = 0; n < Math.max(shape.rows, shape.cols); n++) {
+        r = (r + dr + shape.rows) % shape.rows; c = (c + dc + shape.cols) % shape.cols;
+        const j = shape.cellAt(r, c);
+        if (j !== undefined) { selected = j; break; }
+      }
+    }
+    renderBoard();
+    scrollToCells([selected]);
+  }
+});
+
+// Pause automatically when you leave the app, so the clock is fair.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && screen === "game" && game && !game.finished) { game.paused = true; saveGame(); renderInfo(); renderBoard(); }
+});
+
+// Android back button (used by the Android app): close what's open, or step back to home.
+// Returns true when it handled the press, false to let the app close.
+window.androidBack = function () {
+  if (layer.childElementCount) {
+    if (document.getElementById("overlay")?.dataset.dismissable) closeSheet();
+    return true;   // the win / out-of-mistakes screens need a button choice
+  }
+  if (screen === "game") {
+    if (hintView) { closeHint(); return true; }
+    if (game) saveGame();
+    showHome();
+    return true;
+  }
+  location.href = "index.html";   // from Sudoku's home screen, back goes to all games
+  return true;
+};
+
+// Called by the Android app when it goes to the background: pause the clock and save.
+window.androidPause = function () {
+  if (screen === "game" && game && !game.finished && !game.lost) {
+    game.paused = true;
+    saveGame();
+    renderInfo(); renderBoard();
+  }
+};
+
+// A game stuck on the "out of mistakes" screen or already finished can't be continued.
+if (game && (game.finished || game.lost)) { useGame(null); store.remove("qs-game"); }
+showHome();
+</script>
+</body>
+</html>

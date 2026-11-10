@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiet Games</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Quiet Games">
+<style>
+@font-face { font-family: "Lexend"; src: url("fonts/lexend.woff2") format("woff2"); font-weight: 300 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 600 800; font-display: swap; }
+
+/* Layout: the app's home screen. A short title, then one large card per game, each in its game's colour. */
+:root {
+  --paper: #EEF1F5; --surface: #FFFFFF; --ink: #17202E; --ink-soft: #5A6475; --line-bold: #2A3445;
+  --sudoku: #2A56C6; --sudoku-soft: #D9E3F8; --words: #17806A; --words-soft: #D3ECE5; --cards: #B8452F; --cards-soft: #F6DED8; --blocks: #6A4FC9; --blocks-soft: #E3DDF7; --mahjong: #2F7D4F; --mahjong-soft: #D4EADB;
+  --shadow: 0 1px 2px rgba(23,32,46,.06), 0 6px 20px rgba(23,32,46,.08);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Lexend", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0E131B; --surface: #171E29; --ink: #E3E8F0; --ink-soft: #8B96A8; --line-bold: #708099;
+    --sudoku: #7EA1F2; --sudoku-soft: #263A63; --words: #4FC3A5; --words-soft: #1E3D35; --cards: #F08A73; --cards-soft: #4A2620; --blocks: #A08BF0; --blocks-soft: #2E2650; --mahjong: #6CC490; --mahjong-soft: #1F3B2A;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0E131B; --surface: #171E29; --ink: #E3E8F0; --ink-soft: #8B96A8; --line-bold: #708099;
+  --sudoku: #7EA1F2; --sudoku-soft: #263A63; --words: #4FC3A5; --words-soft: #1E3D35; --cards: #F08A73; --cards-soft: #4A2620; --blocks: #A08BF0; --blocks-soft: #2E2650; --mahjong: #6CC490; --mahjong-soft: #1F3B2A;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 15px; -webkit-tap-highlight-color: transparent; }
+.app {
+  max-width: 520px; margin: 0 auto; min-height: 100%;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 7vh 24px; display: flex; flex-direction: column; gap: 28px;
+}
+header h1 { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1; letter-spacing: -.025em; margin: 0 0 8px; }
+header p { margin: 0; color: var(--ink-soft); }
+.games { display: flex; flex-direction: column; gap: 12px; }
+.game {
+  display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 16px;
+  padding: 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow);
+  color: inherit; text-decoration: none;
+}
+.game:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.game .mark { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; }
+.game .mark svg { width: 44px; height: 44px; }
+.game .txt { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.game h2 { font-family: var(--font-display); font-weight: 800; font-size: 21px; margin: 0; letter-spacing: -.01em; }
+.game .status { color: var(--ink-soft); font-size: 13px; }
+.game .status b { font-weight: 500; }
+.game .go { color: var(--ink-soft); }
+.game .go svg { width: 20px; height: 20px; display: block; }
+.sudoku .mark { background: var(--sudoku-soft); color: var(--sudoku); } .sudoku .status b { color: var(--sudoku); }
+.words .mark { background: var(--words-soft); color: var(--words); } .words .status b { color: var(--words); }
+.cards .mark { background: var(--cards-soft); color: var(--cards); } .cards .status b { color: var(--cards); }
+.blocks .mark { background: var(--blocks-soft); color: var(--blocks); } .blocks .status b { color: var(--blocks); }
+.mahjong .mark { background: var(--mahjong-soft); color: var(--mahjong); } .mahjong .status b { color: var(--mahjong); }
+footer { margin-top: auto; color: var(--ink-soft); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Quiet Games</h1>
+    <p>No ads, no pop-ups. Just the games.</p>
+  </header>
+  <nav class="games" id="games"></nav>
+  <footer id="footer">Everything stays on this device.</footer>
+</div>
+<script>
+"use strict";
+// The version of the games, shown at the bottom so you can tell an update has arrived.
+const GAMES_VERSION = "1.9";
+// Loaded from the website (or a test server on this computer), rather than the copy inside the app?
+const ONLINE = location.protocol === "https:" || location.hostname === "localhost";
+
+// Android app, one time only: bring saved progress over from the copy of the games built
+// into the app. Keys this website already has are never overwritten.
+try {
+  const bridge = window.QuietAndroid;
+  if (bridge && ONLINE && bridge.hasBackup()) {
+    const saved = JSON.parse(bridge.takeBackup() || "{}");
+    for (const [key, value] of Object.entries(saved)) if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
+    bridge.importDone();
+  }
+} catch (e) { /* keep going; the next launch will try again */ }
+
+// On the website, keep a copy of the games on the device so they work offline.
+if (ONLINE && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+// Home screen: one card per game, with where you left off read from each game's saved progress.
+const read = key => { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } };
+const LEVEL_NAMES = { easy: "Easy", medium: "Medium", hard: "Hard", expert: "Expert" };
+const MODE_NAMES = { classic: "", killer: "Killer · ", samurai: "Samurai · " };
+const time = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+const arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
+
+function sudokuStatus() {
+  const g = read("qs-game");
+  if (g && !g.finished && !g.lost) return `<b>Continue</b> ${MODE_NAMES[g.variant || "classic"]}${LEVEL_NAMES[g.level]} · ${time(g.elapsed || 0)}`;
+  return "Classic, Killer and Samurai";
+}
+function cardsStatus() {
+  const m = read("qc-match");
+  return m && !m.over ? `<b>Continue</b> · goal ${m.players[0].goal + 1} of 8, round ${m.round}` : "Rummy against the computer";
+}
+function blocksStatus() {
+  const b = read("qb-best") || {};
+  const top = Math.max(0, ...Object.values(b));
+  return top ? `<b>Best ${top.toLocaleString()}</b> · swap, match and chain` : "Swap blocks before the stack reaches the top";
+}
+function mahjongStatus() {
+  const g = read("qm-game");
+  if (g && !g.finished) return `<b>Continue</b> · ${g.tiles.filter(t => !t.gone).length} tiles left`;
+  return "Clear the stacked tiles in matching pairs";
+}
+function wordsStatus() {
+  const s = read("qw-state");
+  return s && (s.level > 1 || s.found.length) ? `<b>Level ${s.level}</b> · ${s.found.length ? `${s.found.length} found so far` : "ready"}` : "Swipe letters to fill the crossword";
+}
+
+const GAMES = [
+  { cls: "sudoku", href: "sudoku.html", name: "Sudoku", status: sudokuStatus,
+    mark: '<svg viewBox="0 0 44 44"><g fill="currentColor">' + [0, 1, 2].flatMap(r => [0, 1, 2].map(c => `<rect x="${3 + c * 13.5}" y="${3 + r * 13.5}" width="11" height="11" rx="2.5" opacity="${r === 1 && c === 1 ? 1 : 0.35}"/>`)).join("") + "</g></svg>" },
+  { cls: "words", href: "words.html", name: "Words", status: wordsStatus,
+    mark: '<svg viewBox="0 0 44 44" fill="currentColor"><rect x="2.0" y="12.5" width="9" height="9" rx="2" opacity="1"/><rect x="12.5" y="12.5" width="9" height="9" rx="2" opacity="1"/><rect x="23.0" y="12.5" width="9" height="9" rx="2" opacity="1"/><rect x="33.5" y="12.5" width="9" height="9" rx="2" opacity="1"/><rect x="12.5" y="2.0" width="9" height="9" rx="2" opacity="0.35"/><rect x="12.5" y="23.0" width="9" height="9" rx="2" opacity="0.35"/><rect x="12.5" y="33.5" width="9" height="9" rx="2" opacity="0.35"/></svg>' },
+  { cls: "cards", href: "cards.html", name: "Eight Goals", status: cardsStatus,
+    mark: '<svg viewBox="0 0 44 44"><g fill="currentColor"><rect x="5" y="9" width="20" height="28" rx="3.5" opacity=".35" transform="rotate(-12 15 23)"/><rect x="19" y="7" width="20" height="28" rx="3.5"/></g><text x="29" y="26" text-anchor="middle" font-family="Lexend, sans-serif" font-weight="600" font-size="13" fill="var(--surface)">8</text></svg>' },
+  { cls: "blocks", href: "blocks.html", name: "Rising Blocks", status: blocksStatus,
+    mark: '<svg viewBox="0 0 44 44"><g fill="currentColor">' + [[0,3,.35],[1,3,.35],[2,3,1],[0,2,.35],[1,2,1],[2,2,.35],[1,1,1],[2,1,.35]].map(([c,r,o]) => `<rect x="${4 + c * 12.5}" y="${-6 + r * 12.5}" width="11" height="11" rx="3" opacity="${o}"/>`).join("") + '</g><path d="M38 34V12m-4 4 4-4 4 4" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+  { cls: "mahjong", href: "mahjong.html", name: "Mahjong", status: mahjongStatus,
+    mark: '<svg viewBox="0 0 44 44"><rect x="5" y="9" width="20" height="26" rx="4" fill="currentColor" opacity=".35"/><rect x="17" y="6" width="22" height="29" rx="4" fill="currentColor"/><circle cx="28" cy="20.5" r="5.5" fill="none" stroke="var(--surface)" stroke-width="2.4"/></svg>' },
+];
+
+document.getElementById("games").innerHTML = GAMES.map(g => `
+  <a class="game ${g.cls}" href="${g.href}">
+    <span class="mark" aria-hidden="true">${g.mark}</span>
+    <span class="txt"><h2>${g.name}</h2><span class="status">${g.status()}</span></span>
+    <span class="go" aria-hidden="true">${arrow}</span>
+  </a>`).join("");
+
+document.getElementById("footer").textContent = `Version ${GAMES_VERSION} · ${ONLINE ? "updates itself when you're online" : "built-in copy"} · Everything stays on this device.`;
+
+// Android back button on the home screen closes the app.
+window.androidBack = () => false;
+window.androidPause = () => {};
+</script>
+</body>
+</html>

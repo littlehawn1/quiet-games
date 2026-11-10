@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mahjong Solitaire</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: "Lexend"; src: url("fonts/lexend.woff2") format("woff2"); font-weight: 300 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 600 800; font-display: swap; }
+
+/* Layout: score row, the stacked tiles filling the middle, tools along the bottom.
+   Tiles are ivory with a thick edge; each layer up shifts a little up and left. */
+:root {
+  --paper: #EDF1EC; --felt: #DFE7DD; --surface: #FFFFFF; --ink: #1B241C; --ink-soft: #5D6B5E; --line: #CCD6CB;
+  --accent: #2F7D4F; --accent-ink: #FFFFFF; --accent-soft: #D4EADB; --warn: #C25A2A;
+  --tile: #FBF7EC; --tile-edge: #D9CDAE; --tile-side: #B9A97F; --tile-sel: #FFE58A; --hint: #8FD3A8;
+  --red: #C8382D; --green: #2E8A4A; --blue: #2B5FB8; --gold: #C08A12;
+  --shadow: 0 1px 2px rgba(27,36,28,.06), 0 6px 20px rgba(27,36,28,.08);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Lexend", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0F1510; --felt: #18211A; --surface: #1B241D; --ink: #E5ECE5; --ink-soft: #95A596; --line: #2C392E;
+    --accent: #6CC490; --accent-ink: #0F1510; --accent-soft: #1F3B2A; --warn: #F08A5D;
+    --tile: #EFE9D8; --tile-edge: #C7BA97; --tile-side: #8E8061;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0F1510; --felt: #18211A; --surface: #1B241D; --ink: #E5ECE5; --ink-soft: #95A596; --line: #2C392E;
+  --accent: #6CC490; --accent-ink: #0F1510; --accent-soft: #1F3B2A; --warn: #F08A5D;
+  --tile: #EFE9D8; --tile-edge: #C7BA97; --tile-side: #8E8061;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 15px; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.app {
+  max-width: 560px; margin: 0 auto; height: 100%; min-height: 560px;
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+  padding-block: 10px 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.topbar h1 { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -.01em; margin: 0; flex: 1; text-align: center; }
+.icon-btn { width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: grid; place-items: center; color: var(--ink-soft); font-size: 20px; font-weight: 600; }
+.icon-btn:hover { background: var(--felt); color: var(--ink); }
+.icon-btn svg { width: 24px; height: 24px; }
+
+/* Start screen */
+.start { display: flex; flex-direction: column; gap: 16px; padding-top: 3vh; }
+.start h2 { font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 1; margin: 0; letter-spacing: -.025em; }
+.start p { margin: 0; color: var(--ink-soft); line-height: 1.5; max-width: 60ch; }
+.demo { display: flex; gap: 6px; justify-content: center; padding: 6px 0 10px; }
+.choice-list { display: flex; flex-direction: column; gap: 8px; }
+.btn { border: 0; border-radius: 14px; padding: 14px 18px; font-size: 16px; font-weight: 500; background: var(--felt); min-height: 50px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+.choice-list .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; background: var(--surface); box-shadow: var(--shadow); }
+.choice-list .btn small { color: var(--ink-soft); font-size: 13px; font-weight: 400; }
+.choice-list .btn .best { color: var(--accent); font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+/* Game */
+.hud { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; }
+.hud > div { display: flex; flex-direction: column; gap: 1px; }
+.hud > div:nth-child(2) { align-items: center; } .hud > div:nth-child(3) { align-items: flex-end; }
+.hud .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.hud .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hud .v.none { color: var(--warn); }
+.board-wrap { flex: 1 1 0; min-height: 200px; display: grid; place-items: center; position: relative; }
+.board { position: relative; }
+.tile {
+  position: absolute; width: var(--tw); height: var(--th); border: 0; padding: 0; border-radius: calc(var(--tw) * .14);
+  background: var(--tile);
+  box-shadow: inset 0 0 0 1px var(--tile-edge), calc(var(--tw) * .08) calc(var(--tw) * .08) 0 var(--tile-side),
+    calc(var(--tw) * (.1 + var(--z, 0) * .06)) calc(var(--tw) * (.12 + var(--z, 0) * .07)) calc(3px + var(--z, 0) * 3px) rgba(0,0,0,calc(.22 + var(--z, 0) * .08));
+  display: grid; place-items: center; cursor: pointer; transition: transform .12s, opacity .2s, filter .2s;
+}
+.tile svg { width: 86%; height: 86%; display: block; }
+.tile.blocked { filter: brightness(.78) saturate(.75); }
+.tile.sel { background: var(--tile-sel); transform: translate(-2px, -3px); }
+.tile.hint { background: var(--hint); animation: pulse 1s ease-in-out 3; }
+@keyframes pulse { 50% { transform: translate(-1px, -3px); } }
+.tile.gone { opacity: 0; pointer-events: none; transform: scale(.8); }
+.tile.nudge { animation: nudge .3s; }
+@keyframes nudge { 25%, 75% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tool { border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; font-size: 12px; color: var(--ink-soft); border-radius: 12px; }
+.tool:hover { background: var(--felt); }
+.tool:disabled { opacity: .4; cursor: default; }
+.tool .ico { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tool .ico svg { width: 22px; height: 22px; }
+
+/* Sheets */
+.overlay { position: fixed; inset: 0; z-index: 20; background: rgba(9,14,10,.45); display: flex; align-items: flex-end; justify-content: center;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); animation: fade .15s ease-out; }
+@media (min-width: 600px) { .overlay { align-items: center; } }
+@keyframes fade { from { opacity: 0; } }
+.sheet { width: 100%; max-width: 440px; background: var(--surface); border-radius: 20px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; max-height: 86vh; overflow-y: auto; animation: rise .2s ease-out; }
+@keyframes rise { from { transform: translateY(16px); opacity: .6; } }
+.sheet h3 { font-family: var(--font-display); font-weight: 800; font-size: 25px; margin: 0; letter-spacing: -.015em; }
+.sheet h4 { margin: 4px 0 0; font-size: 15px; }
+.sheet p, .sheet li { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+.sheet ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.kicker { color: var(--accent); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.result-grid div { background: var(--felt); border-radius: 12px; padding: 10px 4px; display: flex; flex-direction: column; gap: 2px; }
+.result-grid b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.result-grid span { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+.legend div { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.legend .tile { position: relative; --tw: 30px; --th: 39px; flex: none; cursor: default; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
+.setting input { width: 22px; height: 22px; accent-color: var(--accent); }
+.toast { position: fixed; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 30; max-width: calc(100% - 32px); text-align: center; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="layer"></div>
+<script>
+"use strict";
+/* =====================================================================
+   Mahjong Solitaire: clear the stacked tiles by removing matching pairs
+   of free tiles. Every deal can be cleared.
+
+   Sections:
+     1. Small helpers (shared with Sudoku)
+     2. Tiles, layouts and rules (no drawing, so they can be tested on their own)
+     3. Game state (selecting, matching, undo, hints, shuffling, saving)
+     4. Drawing the tiles and the screens
+     5. Sheets, Android hooks and startup
+   ===================================================================== */
+
+/* ---------- 1. Helpers ---------- */
+const store = {
+  get(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  remove(key) { try { localStorage.removeItem(key); } catch {} },
+};
+
+// A small seeded random number generator, so the daily puzzle is the same for everyone each day.
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shuffle(list, rand) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+function formatTime(totalSeconds) {
+  const s = Math.floor(totalSeconds % 60), m = Math.floor(totalSeconds / 60) % 60, h = Math.floor(totalSeconds / 3600);
+  const pad = n => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function bitCount(m) { let n = 0; while (m) { m &= m - 1; n++; } return n; }
+
+/* ---------- 2. Tiles, layouts and rules ----------
+   Positions use half-tile steps, so a tile at (x, y, z) covers x..x+1 and y..y+1 on
+   layer z. That lets upper layers sit half a tile over the ones below.
+
+   A tile is FREE when nothing on a higher layer overlaps it and at least one of its
+   sides (left or right, on its own layer) is open. Two free tiles that match can be
+   removed. Flowers match any flower, seasons match any season; everything else must be
+   identical.
+
+   Deals are always winnable: the game "plays the layout backwards" first, repeatedly
+   taking out two tiles that would both be free, and gives each such pair a matching
+   face. Playing those pairs in the opposite order clears the board. */
+
+// The tile set: 3 suits x 9 ranks x 4 copies, 4 winds x 4, 3 dragons x 4, 4 flowers, 4 seasons = 144.
+const FACES = [];
+for (const suit of ["dots", "bamboo", "chars"]) for (let n = 1; n <= 9; n++) FACES.push({ kind: suit, n, copies: 4 });
+for (const n of [1, 2, 3, 4]) FACES.push({ kind: "wind", n, copies: 4 });          // east, south, west, north
+for (const n of [1, 2, 3]) FACES.push({ kind: "dragon", n, copies: 4 });           // red, green, white
+FACES.push({ kind: "flower", n: 0, copies: 4 }, { kind: "season", n: 0, copies: 4 });  // 4 different pictures each, any two match
+FACES.forEach((f, i) => (f.id = i));
+
+// All 72 matching pairs in the full set. Flowers and seasons come with their picture (1-4).
+function allPairs() {
+  const pairs = [];
+  for (const f of FACES) {
+    if (f.kind === "flower" || f.kind === "season") pairs.push([[f.id, 1], [f.id, 2]], [[f.id, 3], [f.id, 4]]);
+    else pairs.push([[f.id, 0], [f.id, 0]], [[f.id, 0], [f.id, 0]]);
+  }
+  return pairs;
+}
+const tilesMatch = (a, b) => a.face === b.face;   // flowers/seasons share one face id
+
+// Layouts, built from rectangles of tiles: [x, y, z, columns, rows] in half-tile steps.
+function rects(list) {
+  const out = [];
+  for (const [x0, y0, z, cols, rows, skip] of list) {
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      if (skip && skip(i, j, cols, rows)) continue;
+      out.push({ x: x0 + i * 2, y: y0 + j * 2, z });
+    }
+  }
+  return out;
+}
+const corners = (i, j, c, r) => (i === 0 || i === c - 1) && (j === 0 || j === r - 1);
+const LAYOUTS = {
+  tower: {
+    label: "Little Tower", blurb: "72 tiles · a quick game",
+    positions: rects([[0, 0, 0, 6, 8], [2, 2, 1, 4, 4], [3, 3, 2, 3, 2], [4, 4, 3, 2, 1]]),          // 48 + 16 + 6 + 2
+  },
+  garden: {
+    label: "Garden", blurb: "100 tiles · a few layers deep",
+    positions: rects([[0, 0, 0, 8, 9, corners], [4, 3, 1, 4, 6], [6, 5, 2, 2, 4]]),                  // 68 + 24 + 8
+  },
+  pyramid: {
+    label: "Great Pyramid", blurb: "All 144 tiles",
+    positions: rects([[0, 0, 0, 8, 10], [2, 2, 1, 6, 8], [4, 6, 2, 4, 4]]),                         // 80 + 48 + 16
+  },
+};
+for (const L of Object.values(LAYOUTS)) {
+  L.width = Math.max(...L.positions.map(p => p.x)) + 2;
+  L.height = Math.max(...L.positions.map(p => p.y)) + 2;
+}
+
+/* ---------- Free tiles ---------- */
+function overlaps(a, b) { return Math.abs(a.x - b.x) < 2 && Math.abs(a.y - b.y) < 2; }
+function isFree(tiles, t) {
+  if (t.gone) return false;
+  let left = false, right = false;
+  for (const o of tiles) {
+    if (o === t || o.gone) continue;
+    if (o.z > t.z && overlaps(o, t)) return false;   // something on top
+    if (o.z === t.z && Math.abs(o.y - t.y) < 2) {
+      if (o.x === t.x - 2) left = true;
+      if (o.x === t.x + 2) right = true;
+    }
+  }
+  return !(left && right);
+}
+function freeTiles(tiles) { return tiles.filter(t => isFree(tiles, t)); }
+// Every pair of free tiles that match right now.
+function availablePairs(tiles) {
+  const free = freeTiles(tiles), pairs = [];
+  for (let i = 0; i < free.length; i++) for (let j = i + 1; j < free.length; j++) if (tilesMatch(free[i], free[j])) pairs.push([free[i], free[j]]);
+  return pairs;
+}
+
+/* ---------- Dealing (always winnable) ---------- */
+// Work out an order to take the given positions away two at a time, each pair both free
+// at that moment. Returns the list of position pairs, or null if this attempt got stuck.
+function removalOrder(positions, rand) {
+  const tiles = positions.map(p => ({ ...p, gone: false }));
+  const order = [];
+  while (order.length * 2 < tiles.length) {
+    const free = shuffle(freeTiles(tiles), rand);
+    if (free.length < 2) return null;
+    // Prefer taking tiles from the top layers first, so lower layers stay filled for later.
+    free.sort((a, b) => b.z - a.z + (rand() - 0.5) * 1.5);
+    const a = free[0], b = free[1 + Math.floor(rand() * Math.min(3, free.length - 1))];
+    a.gone = b.gone = true;
+    order.push([tiles.indexOf(a), tiles.indexOf(b)]);
+  }
+  return order;
+}
+// Give every position a face, using the pairs in pairList, so the board can be cleared.
+function dealFaces(positions, pairList, rand) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const order = removalOrder(positions, rand);
+    if (!order) continue;
+    const pairs = shuffle(pairList.slice(), rand);
+    const faces = new Array(positions.length);
+    order.forEach(([i, j], k) => { faces[i] = pairs[k][0]; faces[j] = pairs[k][1]; });
+    return { faces, solution: order };
+  }
+  return null;
+}
+function newMahjongGame(layoutKey, rand) {
+  const L = LAYOUTS[layoutKey];
+  const pairs = shuffle(allPairs(), rand).slice(0, L.positions.length / 2);
+  const deal = dealFaces(L.positions, pairs, rand);
+  const tiles = L.positions.map((p, i) => ({ id: i, x: p.x, y: p.y, z: p.z, face: deal.faces[i][0], pic: deal.faces[i][1], gone: false }));
+  return { layout: layoutKey, tiles, history: [], elapsed: 0, shuffles: 0, hints: 0, finished: false };
+}
+// Shuffle the tiles still on the board into a new arrangement that can still be cleared.
+function reshuffle(game, rand) {
+  const left = game.tiles.filter(t => !t.gone);
+  // Re-pair the faces still in play (they always come in matching pairs).
+  const byFace = {};
+  for (const t of left) (byFace[t.face] = byFace[t.face] || []).push([t.face, t.pic]);
+  const pairs = [];
+  for (const list of Object.values(byFace)) for (let i = 0; i + 1 < list.length; i += 2) pairs.push([list[i], list[i + 1]]);
+  const deal = dealFaces(left.map(t => ({ x: t.x, y: t.y, z: t.z })), pairs, rand);
+  if (!deal) return false;
+  left.forEach((t, i) => { t.face = deal.faces[i][0]; t.pic = deal.faces[i][1]; });
+  game.shuffles++;        // Undo still works: earlier pairs come back exactly as they were
+  return true;
+}
+// A hint: a matching free pair, preferring tiles that sit on top or that open up others.
+function bestHint(tiles) {
+  const pairs = availablePairs(tiles);
+  if (!pairs.length) return null;
+  const opens = t => tiles.filter(o => !o.gone && o !== t && ((o.z < t.z && overlaps(o, t)) || (o.z === t.z && Math.abs(o.y - t.y) < 2 && Math.abs(o.x - t.x) === 2))).length;
+  return pairs.map(p => ({ p, score: p[0].z + p[1].z + opens(p[0]) + opens(p[1]) })).sort((a, b) => b.score - a.score)[0].p;
+}
+function removePair(game, a, b) {
+  if (a === b || !isFree(game.tiles, a) || !isFree(game.tiles, b) || !tilesMatch(a, b)) return false;
+  a.gone = b.gone = true;
+  game.history.push([a.id, b.id]);
+  if (game.tiles.every(t => t.gone)) game.finished = true;
+  return true;
+}
+function undoPair(game) {
+  const last = game.history.pop();
+  if (!last) return false;
+  for (const id of last) game.tiles[id].gone = false;
+  game.finished = false;
+  return true;
+}
+
+/* ---------- 3. Game state ---------- */
+let game = store.get("qm-game", null);
+let stats = store.get("qm-stats", {});
+let settings = Object.assign({ dimBlocked: true }, store.get("qm-settings", {}));
+let selected = null;        // id of the selected tile
+let hintPair = null;
+let timer = null;
+const save = () => { if (game && !game.finished) store.set("qm-game", game); else store.remove("qm-game"); store.set("qm-stats", stats); };
+const statsFor = k => stats[k] || (stats[k] = { played: 0, won: 0, best: null });
+const tilesLeft = () => game.tiles.filter(t => !t.gone).length;
+
+function startGame(layoutKey) {
+  game = newMahjongGame(layoutKey, Math.random);
+  statsFor(layoutKey).played++;
+  selected = null; hintPair = null;
+  save();
+  showGame();
+}
+
+function tapTile(id) {
+  if (!game || game.finished) return;
+  const t = game.tiles[id];
+  if (!isFree(game.tiles, t)) { nudge(id); return; }
+  hintPair = null;
+  if (selected === id) { selected = null; render(); return; }
+  if (selected !== null && tilesMatch(game.tiles[selected], t)) {
+    removePair(game, game.tiles[selected], t);
+    selected = null;
+    save();
+    render();
+    if (game.finished) return setTimeout(openWin, 350);
+    if (!availablePairs(game.tiles).length) setTimeout(openStuck, 450);
+    return;
+  }
+  selected = id;
+  render();
+}
+function hint() {
+  const p = bestHint(game.tiles);
+  if (!p) return openStuck();
+  game.hints++;
+  hintPair = [p[0].id, p[1].id];
+  selected = null;
+  save(); render();
+}
+function undo() {
+  if (!undoPair(game)) return toast("Nothing to undo");
+  selected = null; hintPair = null;
+  save(); render();
+}
+function shuffleTiles() {
+  if (!reshuffle(game, Math.random)) return openDeadEnd();
+  selected = null; hintPair = null;
+  save(); render();
+  toast("Shuffled. This arrangement can still be cleared.");
+}
+
+/* ---------- 4. Drawing ---------- */
+// Tile faces, drawn on a 40 x 52 grid. Every suit tile also shows its number in the corner.
+const COL = { red: "var(--red)", green: "var(--green)", blue: "var(--blue)", gold: "var(--gold)" };
+function pips(n) {
+  // Where the circles go for dots 1-9.
+  const L = { 1: [[20, 27]], 2: [[20, 15], [20, 39]], 3: [[11, 13], [20, 27], [29, 41]], 4: [[12, 16], [28, 16], [12, 38], [28, 38]],
+    5: [[12, 14], [28, 14], [20, 27], [12, 40], [28, 40]], 6: [[12, 13], [28, 13], [12, 27], [28, 27], [12, 41], [28, 41]],
+    7: [[10, 10], [20, 15], [30, 20], [12, 31], [28, 31], [12, 43], [28, 43]], 8: [[12, 10], [28, 10], [12, 21], [28, 21], [12, 32], [28, 32], [12, 43], [28, 43]],
+    9: [[10, 12], [20, 12], [30, 12], [10, 27], [20, 27], [30, 27], [10, 42], [20, 42], [30, 42]] };
+  return L[n];
+}
+function faceSVG(face, pic) {
+  const f = FACES[face];
+  const corner = n => `<text x="4" y="11" font-size="9" font-weight="700" fill="var(--ink-soft)" font-family="Lexend, sans-serif">${n}</text>`;
+  let body = "";
+  if (f.kind === "dots") {
+    const cols = [COL.blue, COL.green, COL.red];
+    const r = f.n === 1 ? 11 : f.n <= 4 ? 6.5 : f.n <= 6 ? 5.5 : 4.6;
+    body = pips(f.n).map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${cols[(i + f.n) % 3]}" stroke-width="${r > 7 ? 4 : 2.4}"/><circle cx="${x}" cy="${y}" r="${r * .35}" fill="${cols[(i + f.n) % 3]}"/>`).join("");
+  } else if (f.kind === "bamboo") {
+    if (f.n === 1) body = `<path d="M20 46V14" stroke="${COL.green}" stroke-width="5" stroke-linecap="round"/><path d="M20 22c-8-2-11-8-11-12 6 0 10 4 11 9m0 6c8-2 11-8 11-12-6 0-10 4-11 9" fill="${COL.green}"/><circle cx="20" cy="12" r="3.5" fill="${COL.red}"/>`;
+    else {
+      const per = f.n <= 3 ? f.n : f.n <= 6 ? Math.ceil(f.n / 2) : 3;
+      const rows = Math.ceil(f.n / per), h = Math.min(18, 38 / rows - 2);
+      for (let k = 0; k < f.n; k++) {
+        const row = Math.floor(k / per), inRow = Math.min(per, f.n - row * per), col = k % per;
+        const x = 20 + (col - (inRow - 1) / 2) * 10, y = 8 + row * (40 / rows) + (40 / rows - h) / 2;
+        const c = f.n >= 5 && k === Math.floor(f.n / 2) ? COL.red : COL.green;
+        body += `<rect x="${x - 2.6}" y="${y}" width="5.2" height="${h}" rx="2.4" fill="${c}"/><rect x="${x - 3.6}" y="${y + h / 2 - 1}" width="7.2" height="2" rx="1" fill="${c}"/>`;
+      }
+    }
+  } else if (f.kind === "chars") {
+    body = `<rect x="7" y="9" width="26" height="34" rx="5" fill="none" stroke="${COL.red}" stroke-width="2"/><text x="20" y="35" text-anchor="middle" font-size="25" font-weight="700" fill="${COL.red}" font-family="Bricolage Grotesque, Lexend, sans-serif">${f.n}</text><path d="M11 13h18M11 39h18" stroke="${COL.blue}" stroke-width="1.6"/>`;
+  } else if (f.kind === "wind") {
+    const [letter, angle] = [["E", 90], ["S", 180], ["W", 270], ["N", 0]][f.n - 1];
+    body = `<g transform="rotate(${angle} 20 27)"><path d="M20 8l5 9h-10z" fill="${COL.red}"/></g><circle cx="20" cy="27" r="13" fill="none" stroke="${COL.blue}" stroke-width="1.6"/><text x="20" y="33" text-anchor="middle" font-size="17" font-weight="700" fill="${COL.blue}" font-family="Lexend, sans-serif">${letter}</text>`;
+  } else if (f.kind === "dragon") {
+    if (f.n === 1) body = `<circle cx="20" cy="27" r="12" fill="${COL.red}"/>` + [0, 45, 90, 135, 180, 225, 270, 315].map(a => `<path d="M20 8l2 5h-4z" fill="${COL.red}" transform="rotate(${a} 20 27)"/>`).join("");
+    else if (f.n === 2) body = `<path d="M20 9l13 18-13 18-13-18z" fill="${COL.green}"/><path d="M20 15l8 12-8 12-8-12z" fill="none" stroke="#fff" stroke-width="1.6" opacity=".7"/>`;
+    else body = `<rect x="7" y="9" width="26" height="36" rx="3" fill="none" stroke="${COL.blue}" stroke-width="3"/><rect x="12" y="14" width="16" height="26" rx="2" fill="none" stroke="${COL.blue}" stroke-width="1.4"/>`;
+  } else if (f.kind === "flower") {
+    const c = [COL.red, COL.gold, COL.blue, "#B04FB0"][pic - 1];
+    body = [0, 72, 144, 216, 288].map(a => `<ellipse cx="20" cy="18" rx="5.5" ry="8" fill="${c}" opacity=".9" transform="rotate(${a} 20 26)"/>`).join("") + `<circle cx="20" cy="26" r="4" fill="${COL.gold}"/><path d="M20 34v12" stroke="${COL.green}" stroke-width="2.2"/>` + corner(pic);
+  } else if (f.kind === "season") {
+    if (pic === 1) body = `<path d="M20 46V24" stroke="${COL.green}" stroke-width="2.4"/><path d="M20 30c-9 0-11-7-11-11 7 0 11 4 11 11zm0-4c9 0 11-7 11-11-7 0-11 4-11 11z" fill="${COL.green}"/>`;                // spring sprout
+    else if (pic === 2) body = `<circle cx="20" cy="27" r="8" fill="${COL.gold}"/>` + [0, 45, 90, 135, 180, 225, 270, 315].map(a => `<path d="M20 9v6" stroke="${COL.gold}" stroke-width="2.4" stroke-linecap="round" transform="rotate(${a} 20 27)"/>`).join("");   // summer sun
+    else if (pic === 3) body = `<path d="M20 9c10 6 13 16 8 26-4 7-12 8-16 2-5-9 0-20 8-28z" fill="${COL.red}"/><path d="M20 12v34" stroke="#fff" stroke-width="1.4" opacity=".7"/>`;   // autumn leaf
+    else body = [0, 60, 120].map(a => `<path d="M20 11v32M14 15l6 5 6-5M14 39l6-5 6 5" stroke="${COL.blue}" stroke-width="2.2" fill="none" stroke-linecap="round" transform="rotate(${a} 20 27)"/>`).join("");   // winter snowflake
+    body += corner(pic);
+  }
+  // Suits: shrink the picture toward the bottom right so the corner number has room.
+  if (["dots", "bamboo", "chars"].includes(f.kind)) body = `<g transform="translate(4.5 5.5) scale(.88)">${body}</g>` + corner(f.n);
+  return `<svg viewBox="0 0 40 52" aria-hidden="true">${body}</svg>`;
+}
+function tileName(t) {
+  const f = FACES[t.face];
+  if (f.kind === "flower") return `flower ${t.pic}`;
+  if (f.kind === "season") return ["spring", "summer", "autumn", "winter"][t.pic - 1];
+  if (f.kind === "wind") return ["east", "south", "west", "north"][f.n - 1] + " wind";
+  if (f.kind === "dragon") return ["red", "green", "white"][f.n - 1] + " dragon";
+  return `${f.n} of ${{ dots: "dots", bamboo: "bamboo", chars: "numbers" }[f.kind]}`;
+}
+
+const ICONS = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>',
+  shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+};
+const app = document.getElementById("app");
+const layer = document.getElementById("layer");
+
+function showStart() {
+  stopTimer();
+  const demo = [[4, 0], [9, 0], [24, 0], [27, 0], [31, 0], [34, 2]];   // a few faces to show what the tiles look like
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="home" aria-label="Back to all games">${ICONS.back}</button><h1></h1><button class="icon-btn" id="help" aria-label="How to play">?</button></div>
+    <div class="start">
+      <h2>Mahjong Solitaire</h2>
+      <p>Tap two matching tiles to remove them. A tile can only be taken when nothing sits on top of it and its left or right side is open. Clear the whole stack to win. Every deal can be cleared.</p>
+      <div class="demo" aria-hidden="true">${demo.map(([f, p]) => `<div class="tile" style="position:relative;--tw:40px;--th:52px">${faceSVG(f, p)}</div>`).join("")}</div>
+      ${game && !game.finished ? `<button class="btn primary" id="resume">Continue · ${LAYOUTS[game.layout].label}, ${tilesLeft()} tiles left</button>` : ""}
+      <div class="choice-list">${Object.entries(LAYOUTS).map(([k, L]) => {
+        const s = statsFor(k);
+        return `<button class="btn" data-layout="${k}"><span>${L.label}<br><small>${L.blurb}</small></span><span class="best">${s.best != null ? "Best " + formatTime(s.best) : s.won ? s.won + " won" : ""}</span></button>`;
+      }).join("")}</div>
+    </div>`;
+  document.getElementById("home").onclick = () => { location.href = "index.html"; };
+  document.getElementById("help").onclick = openHelp;
+  document.getElementById("resume")?.addEventListener("click", showGame);
+  app.querySelectorAll("[data-layout]").forEach(b => (b.onclick = () => {
+    if (game && !game.finished) {
+      openSheet(`<h3>Start a new game?</h3><p>Your current game (${tilesLeft()} tiles left) will be lost.</p>
+        <button class="btn primary" id="yes">Start new game</button><button class="btn" id="no">Keep playing</button>`, o => {
+          o.querySelector("#yes").onclick = () => { closeSheet(); startGame(b.dataset.layout); };
+          o.querySelector("#no").onclick = () => { closeSheet(); showGame(); };
+        });
+    } else startGame(b.dataset.layout);
+  }));
+}
+
+let tileEls = [];
+function showGame() {
+  closeSheet();
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="home" aria-label="Back">${ICONS.back}</button><h1>${LAYOUTS[game.layout].label}</h1><button class="icon-btn" id="help" aria-label="How to play">?</button></div>
+    <div class="hud">
+      <div><span class="k">Tiles left</span><span class="v" id="left"></span></div>
+      <div><span class="k">Time</span><span class="v" id="time"></span></div>
+      <div><span class="k">Matches</span><span class="v" id="moves"></span></div>
+    </div>
+    <div class="board-wrap" id="wrap"><div class="board" id="board" role="grid" aria-label="Tiles"></div></div>
+    <div class="tools">
+      <button class="tool" id="t-undo"><span class="ico">${ICONS.undo}</span>Undo</button>
+      <button class="tool" id="t-hint"><span class="ico">${ICONS.bulb}</span>Hint</button>
+      <button class="tool" id="t-shuffle"><span class="ico">${ICONS.shuffle}</span>Shuffle</button>
+      <button class="tool" id="t-new"><span class="ico">${ICONS.plus}</span>New</button>
+    </div>`;
+  const board = document.getElementById("board");
+  // Draw lower layers first, and within a layer top-to-bottom, left-to-right, so edges overlap correctly.
+  const order = game.tiles.slice().sort((a, b) => a.z - b.z || a.y - b.y || a.x - b.x);
+  tileEls = new Array(game.tiles.length);
+  for (const t of order) {
+    const el = document.createElement("button");
+    el.className = "tile";
+    el.dataset.id = t.id;
+    el.innerHTML = faceSVG(t.face, t.pic);
+    board.appendChild(el);
+    tileEls[t.id] = el;
+  }
+  board.addEventListener("click", e => { const el = e.target.closest(".tile"); if (el) tapTile(+el.dataset.id); });
+  document.getElementById("home").onclick = () => { save(); showStart(); };
+  document.getElementById("help").onclick = openHelp;
+  document.getElementById("t-undo").onclick = undo;
+  document.getElementById("t-hint").onclick = hint;
+  document.getElementById("t-shuffle").onclick = shuffleTiles;
+  document.getElementById("t-new").onclick = showStart;
+  layoutBoard();
+  render();
+  startTimer();
+}
+
+// Size the tiles to fit the space, then place each one. Each layer up shifts up and left.
+function layoutBoard() {
+  const wrap = document.getElementById("wrap"), board = document.getElementById("board");
+  if (!wrap || !game) return;
+  const L = LAYOUTS[game.layout];
+  const cols = L.width / 2, rows = L.height / 2, layers = Math.max(...L.positions.map(p => p.z));
+  const ratio = 1.3, lift = .17;
+  const tw = Math.floor(Math.min((wrap.clientWidth - 8) / (cols + layers * lift + .1), (wrap.clientHeight - 8) / (rows * ratio + layers * lift + .1)));
+  const th = Math.round(tw * ratio), d = tw * lift;
+  board.style.width = (cols * tw + layers * d + tw * .1) + "px";
+  board.style.height = (rows * th + layers * d + tw * .1) + "px";
+  board.style.setProperty("--tw", tw + "px");
+  board.style.setProperty("--th", th + "px");
+  for (const t of game.tiles) {
+    const el = tileEls[t.id];
+    el.style.left = (t.x / 2 * tw + (layers - t.z) * d) + "px";
+    el.style.top = (t.y / 2 * th + (layers - t.z) * d) + "px";
+    el.style.setProperty("--z", t.z);   // higher layers cast a deeper shadow
+  }
+}
+window.addEventListener("resize", () => { if (document.getElementById("board")) layoutBoard(); });
+
+function render() {
+  if (!document.getElementById("board")) return;
+  const free = new Set(freeTiles(game.tiles).map(t => t.id));
+  for (const t of game.tiles) {
+    const el = tileEls[t.id];
+    el.className = "tile" + (t.gone ? " gone" : "") + (!t.gone && !free.has(t.id) && settings.dimBlocked ? " blocked" : "")
+      + (selected === t.id ? " sel" : "") + (hintPair && hintPair.includes(t.id) ? " hint" : "");
+    el.innerHTML = faceSVG(t.face, t.pic);
+    el.setAttribute("aria-label", tileName(t) + (free.has(t.id) ? "" : ", blocked"));
+    el.tabIndex = t.gone ? -1 : 0;
+  }
+  document.getElementById("left").textContent = tilesLeft();
+  const n = availablePairs(game.tiles).length;
+  const moves = document.getElementById("moves");
+  moves.textContent = n;
+  moves.classList.toggle("none", n === 0);
+  document.getElementById("time").textContent = formatTime(game.elapsed);
+  document.getElementById("t-undo").disabled = !game.history.length;
+}
+function nudge(id) { const el = tileEls[id]; el.classList.remove("nudge"); void el.offsetWidth; el.classList.add("nudge"); }
+
+function startTimer() {
+  stopTimer();
+  timer = setInterval(() => {
+    if (!game || game.finished || document.hidden || layer.childElementCount || !document.getElementById("time")) return;
+    game.elapsed++;
+    if (game.elapsed % 5 === 0) save();
+    document.getElementById("time").textContent = formatTime(game.elapsed);
+  }, 1000);
+}
+function stopTimer() { if (timer) clearInterval(timer); timer = null; }
+
+/* ---------- 5. Sheets, Android hooks, startup ---------- */
+function openSheet(html, onReady, dismissable = true) {
+  layer.innerHTML = `<div class="overlay" id="overlay"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const overlay = document.getElementById("overlay");
+  if (dismissable) overlay.addEventListener("click", e => { if (e.target === overlay) closeSheet(); });
+  overlay.dataset.dismissable = dismissable ? "1" : "";
+  if (onReady) onReady(overlay);
+}
+function closeSheet() { layer.innerHTML = ""; }
+
+function openWin() {
+  const s = statsFor(game.layout);
+  s.won++;
+  const newBest = s.best == null || game.elapsed < s.best;
+  if (newBest) s.best = game.elapsed;
+  const layout = game.layout, time = game.elapsed, hints = game.hints, shuffles = game.shuffles;
+  save();
+  openSheet(`<span class="kicker">Cleared</span>
+    <h3>${newBest ? "New best time!" : "Board cleared."}</h3>
+    <div class="result-grid"><div><b>${formatTime(time)}</b><span>Time</span></div><div><b>${hints}</b><span>Hints</span></div><div><b>${shuffles}</b><span>Shuffles</span></div></div>
+    <p>${LAYOUTS[layout].label} · best ${formatTime(s.best)} · ${s.won} cleared</p>
+    <button class="btn primary" id="again">Play again</button><button class="btn" id="menu">Choose a layout</button>`, o => {
+      o.querySelector("#again").onclick = () => { closeSheet(); startGame(layout); };
+      o.querySelector("#menu").onclick = () => { closeSheet(); showStart(); };
+    }, false);
+}
+function openStuck() {
+  openSheet(`<h3>No matches left</h3>
+    <p>None of the free tiles match. Shuffle the ${tilesLeft()} tiles that are left into a new arrangement that can still be cleared, or undo and try a different pair.</p>
+    <button class="btn primary" id="shuf">Shuffle</button><button class="btn" id="und" ${game.history.length ? "" : "disabled"}>Undo</button><button class="btn" id="menu">New game</button>`, o => {
+      o.querySelector("#shuf").onclick = () => { closeSheet(); shuffleTiles(); };
+      o.querySelector("#und").onclick = () => { closeSheet(); undo(); };
+      o.querySelector("#menu").onclick = () => { closeSheet(); showStart(); };
+    });
+}
+function openDeadEnd() {
+  openSheet(`<h3>These tiles can't be cleared</h3>
+    <p>However they're shuffled, the tiles left can't all come off (usually one sits right on top of its only partner). Undo a few moves to try a different path, or start a new game.</p>
+    <button class="btn primary" id="und" ${game.history.length ? "" : "disabled"}>Undo</button><button class="btn" id="menu">New game</button>`, o => {
+      o.querySelector("#und").onclick = () => { closeSheet(); undo(); };
+      o.querySelector("#menu").onclick = () => { closeSheet(); showStart(); };
+    });
+}
+function openHelp() {
+  const legend = [["dots", [[0, 0], [4, 0], [8, 0]]], ["bamboo", [[9, 0], [13, 0], [17, 0]]], ["numbers", [[18, 0], [22, 0], [26, 0]]],
+    ["winds", [[27, 0], [28, 0], [29, 0], [30, 0]]], ["dragons", [[31, 0], [32, 0], [33, 0]]], ["flowers", [[34, 1], [34, 2], [34, 3], [34, 4]]], ["seasons", [[35, 1], [35, 2], [35, 3], [35, 4]]]];
+  openSheet(`<h3>How to play</h3>
+    <ul>
+      <li>Tap two <b>matching</b> tiles to remove them. Tiles that can't be taken yet are shaded.</li>
+      <li>A tile is <b>free</b> when nothing sits on top of it and its left or right side is open.</li>
+      <li>Any <b>flower</b> matches any flower, and any <b>season</b> matches any season. Everything else must match exactly.</li>
+      <li><b>Hint</b> shows a pair you can take. <b>Undo</b> puts pairs back. If no matches are left, <b>Shuffle</b> rearranges the tiles so they can still be cleared.</li>
+      <li>Every deal can be cleared. The order you take pairs in matters, so look before you tap.</li>
+    </ul>
+    <h4>The tiles</h4>
+    <div class="legend">${legend.map(([name, faces]) => `<div>${faces.slice(0, 3).map(([f, p]) => `<span class="tile">${faceSVG(f, p)}</span>`).join("")}${name}</div>`).join("")}</div>
+    <label class="setting" for="dim">Shade tiles that can't be taken yet<input type="checkbox" id="dim" ${settings.dimBlocked ? "checked" : ""}></label>
+    <button class="btn" id="close">Close</button>`, o => {
+      o.querySelector("#dim").onchange = e => { settings.dimBlocked = e.target.checked; store.set("qm-settings", settings); render(); };
+      o.querySelector("#close").onclick = closeSheet;
+    });
+}
+let toastTimer = null;
+function toast(message) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div");
+  t.className = "toast"; t.setAttribute("role", "status"); t.textContent = message;
+  document.body.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 2400);
+}
+
+window.androidBack = function () {
+  if (layer.childElementCount) { if (document.getElementById("overlay")?.dataset.dismissable) closeSheet(); return true; }
+  if (document.getElementById("board")) { save(); showStart(); return true; }
+  location.href = "index.html";
+  return true;
+};
+window.androidPause = () => { if (game) save(); };
+document.addEventListener("visibilitychange", () => { if (document.hidden && game) save(); });
+
+if (game && game.finished) { game = null; store.remove("qm-game"); }
+showStart();
+</script>
+</body>
+</html>

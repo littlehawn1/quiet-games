@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiet Words</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: "Lexend"; src: url("fonts/lexend.woff2") format("woff2"); font-weight: 300 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 600 800; font-display: swap; }
+
+/* Layout: one column. The crossword on top, the word you're spelling, then the letter wheel. */
+:root {
+  --paper: #EEF2F0; --surface: #FFFFFF; --ink: #16231F; --ink-soft: #586861;
+  --line: #CBD5D0; --accent: #17806A; --accent-ink: #FFFFFF; --accent-soft: #D3ECE5;
+  --bonus: #B26A00; --bonus-soft: #FCEFD6; --error: #C62F3A; --tile: #E3E9E6;
+  --shadow: 0 1px 2px rgba(22,35,31,.06), 0 6px 20px rgba(22,35,31,.08);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Lexend", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0D1513; --surface: #16211E; --ink: #E2EBE7; --ink-soft: #8B9C95; --line: #2A3833;
+    --accent: #4FC3A5; --accent-ink: #0D1513; --accent-soft: #1E3D35; --bonus: #F0B455; --bonus-soft: #3A2E17;
+    --error: #F2707A; --tile: #1F2B27; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0D1513; --surface: #16211E; --ink: #E2EBE7; --ink-soft: #8B9C95; --line: #2A3833;
+  --accent: #4FC3A5; --accent-ink: #0D1513; --accent-soft: #1E3D35; --bonus: #F0B455; --bonus-soft: #3A2E17;
+  --error: #F2707A; --tile: #1F2B27; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 15px;
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.app {
+  max-width: 520px; margin: 0 auto; height: 100%; min-height: 560px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 20px; display: flex; flex-direction: column; gap: 12px;
+}
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.topbar h1 { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -.01em; margin: 0; flex: 1; text-align: center; }
+.icon-btn { width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: grid; place-items: center; color: var(--ink-soft); }
+.icon-btn:hover { background: var(--tile); color: var(--ink); }
+.icon-btn svg { width: 24px; height: 24px; }
+.spacer { width: 44px; }
+
+.progress { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--ink-soft); }
+.progress b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.progress .lvl { font-family: var(--font-display); font-weight: 800; font-size: 22px; color: var(--ink); letter-spacing: -.01em; }
+
+/* Crossword: only word cells are drawn; the rest of the grid is empty paper. */
+.cross-wrap { flex: 1 1 0; min-height: 120px; display: grid; place-items: center; padding-block: 4px; overflow: hidden; }
+/* --cell is set from script so the crossword fits both the width and the height left over. */
+.cross {
+  --cell: 36px;
+  display: grid; gap: 4px;
+  grid-template-columns: repeat(var(--cols), var(--cell)); grid-template-rows: repeat(var(--rows), var(--cell));
+}
+.tile {
+  border-radius: 8px; background: var(--tile); display: grid; place-items: center;
+  font-size: calc(var(--cell) * .55); font-weight: 600; text-transform: uppercase; color: transparent;
+  transition: background-color .2s, color .2s;
+}
+.tile.hinted { color: var(--accent); background: var(--surface); box-shadow: inset 0 0 0 2px var(--accent-soft); }
+.tile.found { background: var(--accent); color: var(--accent-ink); }
+.tile.pop { animation: pop .35s ease-out both; }
+.tile.nudge { animation: nudge .45s ease-out; }
+@keyframes pop { 0% { transform: scale(.5); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes nudge { 0%, 100% { transform: none; } 30% { transform: translateY(-5px); } 60% { transform: translateY(2px); } }
+
+/* The word being spelled */
+.spell { height: 48px; display: grid; place-items: center; }
+.spell span {
+  min-width: 48px; padding: 6px 16px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow);
+  font-size: 24px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink);
+}
+.spell span:empty { visibility: hidden; }
+.spell.good span { background: var(--accent); color: var(--accent-ink); }
+.spell.bonus span { background: var(--bonus-soft); color: var(--bonus); }
+.spell.bad span { animation: shake .4s; color: var(--error); }
+.spell.repeat span { color: var(--ink-soft); animation: shake .3s; }
+.spell-note { text-align: center; font-size: 13px; color: var(--ink-soft); height: 18px; margin-top: -8px; }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
+/* Letter wheel */
+.wheel-row { display: grid; place-items: center; }
+.wheel {
+  position: relative; width: min(76vw, 290px, 38vh); aspect-ratio: 1; border-radius: 50%;
+  background: var(--surface); box-shadow: var(--shadow); touch-action: none;
+}
+.wheel svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wheel polyline { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: .55; }
+.letter {
+  position: absolute; width: 21%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
+  display: grid; place-items: center; font-size: clamp(26px, 9vw, 36px); font-weight: 600; text-transform: uppercase;
+  color: var(--ink); transition: background-color .1s, color .1s;
+}
+.letter.on { background: var(--accent); color: var(--accent-ink); }
+.wheel.shuffling .letter { transition: left .3s ease, top .3s ease; }
+
+.tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tool { border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; font-size: 12px; color: var(--ink-soft); border-radius: 12px; }
+.tool:hover { background: var(--tile); }
+.tool .ico { position: relative; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tool .ico svg { width: 22px; height: 22px; }
+.tool .badge {
+  position: absolute; top: -4px; right: -10px; min-width: 22px; height: 18px; padding: 0 5px; border-radius: 9px;
+  font-size: 11px; font-weight: 600; display: grid; place-items: center; background: var(--bonus); color: var(--surface);
+}
+
+/* Sheets */
+.overlay {
+  position: fixed; inset: 0; z-index: 20; background: rgba(8,14,12,.45); display: flex; align-items: flex-end; justify-content: center;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); animation: fade .15s ease-out;
+}
+@media (min-width: 600px) { .overlay { align-items: center; } }
+@keyframes fade { from { opacity: 0; } }
+.sheet {
+  width: 100%; max-width: 440px; background: var(--surface); border-radius: 20px; padding: 22px 20px 18px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; max-height: 80vh; overflow-y: auto; animation: rise .2s ease-out;
+}
+@keyframes rise { from { transform: translateY(16px); opacity: .6; } }
+.sheet h3 { font-family: var(--font-display); font-weight: 800; font-size: 24px; margin: 0; letter-spacing: -.015em; }
+.sheet p { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+.kicker { color: var(--accent); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+.btn { border: 0; border-radius: 14px; padding: 15px 18px; font-size: 16px; font-weight: 500; background: var(--tile); min-height: 52px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips span { padding: 5px 10px; border-radius: 999px; background: var(--bonus-soft); color: var(--bonus); font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.result-grid div { background: var(--tile); border-radius: 12px; padding: 10px 4px; display: flex; flex-direction: column; gap: 2px; }
+.result-grid b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.result-grid span { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 30; white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-height: 700px) { .app { gap: 8px; padding-block: 6px 12px; } }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="layer"></div>
+
+<script src="words-data.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   Quiet Words: swipe across the letter wheel to spell words and fill
+   the crossword. Extra real words count as bonus words.
+
+   Sections:
+     1. Small helpers (shared with Sudoku)
+     2. Dictionary and level generator
+     3. Game state (found words, hints, saving)
+     4. Drawing the screen and the letter wheel
+     5. Pop-up sheets, keyboard, Android hooks and startup
+   ===================================================================== */
+
+/* ---------- 1. Helpers ---------- */
+const store = {
+  get(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  remove(key) { try { localStorage.removeItem(key); } catch {} },
+};
+
+// A small seeded random number generator, so the daily puzzle is the same for everyone each day.
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shuffle(list, rand) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+function formatTime(totalSeconds) {
+  const s = Math.floor(totalSeconds % 60), m = Math.floor(totalSeconds / 60) % 60, h = Math.floor(totalSeconds / 3600);
+  const pad = n => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function bitCount(m) { let n = 0; while (m) { m &= m - 1; n++; } return n; }
+
+/* ---------- 2. Words: dictionary and level generator ----------
+   Each level is built from one base word: its letters go on the wheel, and some of the
+   words those letters can make are laid out as a small crossword. Any other real word
+   from the same letters counts as a bonus word. Levels are generated from the level
+   number, so level 12 is always the same puzzle. */
+const COMMON = WORDS_COMMON.split(" ");
+const USUAL = WORDS_USUAL.split(" ");
+const EXTRA = WORDS_EXTRA.split(" ");
+const ALL_WORDS = [...COMMON, ...USUAL, ...EXTRA];
+const IS_COMMON = new Set(COMMON);
+const IS_USUAL = new Set(USUAL);
+const ANSWERS_WIDE = [...COMMON, ...USUAL];
+
+const MAX_ROWS = 10, MAX_COLS = 10;
+
+// How each stretch of levels is built: wheel size, how many words, which words can be answers.
+// From level 301 on, levels alternate between 8 letters (odd steps) and 7 letters.
+function levelPlan(n) {
+  if (n <= 6)  return { letters: 4, min: 3, max: 4, usual: false };
+  if (n <= 20) return { letters: 5, min: 4, max: 5, usual: false };
+  if (n <= 45) return { letters: 6, min: 5, max: 7, usual: false };
+  if (n <= 90) return { letters: 6, min: 6, max: 8, usual: true };
+  if (n <= 300 || (n - 301) % 2 === 1) return { letters: 7, min: 7, max: 10, usual: true };
+  return { letters: 8, min: 8, max: 12, usual: true };
+}
+
+/* Which base word a level uses: each wheel size has one fixed shuffled list of base words,
+   and levels take them in turn, so no set of letters comes back until its list runs out. */
+function baseSlot(n) {
+  if (n <= 6) return { letters: 4, index: n - 1 };
+  if (n <= 20) return { letters: 5, index: n - 7 };
+  if (n <= 90) return { letters: 6, index: n - 21 };
+  if (n <= 300) return { letters: 7, index: n - 91 };
+  const k = n - 301;
+  return k % 2 === 0 ? { letters: 8, index: k / 2 } : { letters: 7, index: 210 + (k - 1) / 2 };
+}
+// One word per set of letters, each making enough everyday words for a good crossword.
+// Worked out ahead of time by tools/build_word_list.py (it's slow to do on a phone).
+const baseLists = {};
+const baseList = len => baseLists[len] || (baseLists[len] = WORD_BASES[len].split(" "));
+function baseFor(n) {
+  const { letters, index } = baseSlot(n);
+  const list = baseList(letters);
+  const pass = Math.floor(index / list.length);   // after a whole list is used, start a new shuffle
+  const order = shuffle(list.slice(), seededRandom(hashString(`quiet-words-bases-${letters}-${pass}`)));
+  return order[index % list.length];
+}
+
+function letterCounts(word) {
+  const counts = new Array(26).fill(0);
+  for (const ch of word) counts[ch.charCodeAt(0) - 97]++;
+  return counts;
+}
+function canMake(word, counts) {
+  const used = new Array(26).fill(0);
+  for (const ch of word) {
+    const k = ch.charCodeAt(0) - 97;
+    if (++used[k] > counts[k]) return false;
+  }
+  return true;
+}
+// Every dictionary word (3+ letters) that these letters can spell.
+function wordsFrom(letters, list) {
+  const counts = letterCounts(letters);
+  return list.filter(w => w.length <= letters.length && canMake(w, counts));
+}
+
+/* Crossword layout: place words one at a time, each crossing a word already placed,
+   never touching other words side by side. Cells are stored as "row,col" keys. */
+function tryPlace(grid, word, r, c, dir) {
+  const [dr, dc] = dir === "across" ? [0, 1] : [1, 0];
+  const at = (rr, cc) => grid.get(rr + "," + cc);
+  if (at(r - dr, c - dc) || at(r + dr * word.length, c + dc * word.length)) return -1;   // must not run into another word
+  let crossings = 0;
+  for (let k = 0; k < word.length; k++) {
+    const rr = r + dr * k, cc = c + dc * k;
+    const cell = at(rr, cc);
+    if (cell) {
+      if (cell.letter !== word[k] || cell.dirs.includes(dir)) return -1;
+      crossings++;
+    } else if (at(rr + dc, cc + dr) || at(rr - dc, cc - dr)) {
+      return -1;   // a neighbour on either side would make a stray two-letter word
+    }
+  }
+  return crossings;
+}
+function place(grid, word, r, c, dir) {
+  const [dr, dc] = dir === "across" ? [0, 1] : [1, 0];
+  for (let k = 0; k < word.length; k++) {
+    const key = (r + dr * k) + "," + (c + dc * k);
+    const cell = grid.get(key);
+    if (cell) cell.dirs.push(dir);
+    else grid.set(key, { letter: word[k], dirs: [dir] });
+  }
+}
+function bounds(grid, extra) {
+  let r0 = Infinity, r1 = -Infinity, c0 = Infinity, c1 = -Infinity;
+  const take = (r, c) => { r0 = Math.min(r0, r); r1 = Math.max(r1, r); c0 = Math.min(c0, c); c1 = Math.max(c1, c); };
+  for (const key of grid.keys()) { const [r, c] = key.split(",").map(Number); take(r, c); }
+  if (extra) extra.forEach(([r, c]) => take(r, c));
+  return { r0, r1, c0, c1, rows: r1 - r0 + 1, cols: c1 - c0 + 1 };
+}
+
+function layoutWords(words, target, rand) {
+  const grid = new Map(), placed = [];
+  const [first, ...rest] = words;
+  place(grid, first, 0, 0, "across");
+  placed.push({ word: first, r: 0, c: 0, dir: "across" });
+  for (const word of rest) {
+    if (placed.length >= target) break;
+    let best = null;
+    for (const p of placed) {
+      const dir = p.dir === "across" ? "down" : "across";
+      for (let j = 0; j < p.word.length; j++) {
+        for (let i = 0; i < word.length; i++) {
+          if (word[i] !== p.word[j]) continue;
+          const pr = p.dir === "across" ? p.r : p.r + j, pc = p.dir === "across" ? p.c + j : p.c;
+          const r = dir === "down" ? pr - i : pr, c = dir === "across" ? pc - i : pc;
+          const crossings = tryPlace(grid, word, r, c, dir);
+          if (crossings < 1) continue;
+          const end = dir === "across" ? [r, c + word.length - 1] : [r + word.length - 1, c];
+          const b = bounds(grid, [[r, c], end]);
+          if (b.rows > MAX_ROWS || b.cols > MAX_COLS) continue;
+          // Prefer more crossings and a compact, squarish grid.
+          const score = crossings * 6 - b.rows * b.cols * 0.15 - Math.abs(b.rows - b.cols) * 0.5 + rand() * 0.5;
+          if (!best || score > best.score) best = { r, c, dir, score };
+        }
+      }
+    }
+    if (best) { place(grid, word, best.r, best.c, best.dir); placed.push({ word, r: best.r, c: best.c, dir: best.dir }); }
+  }
+  const b = bounds(grid);
+  return {
+    rows: b.rows, cols: b.cols,
+    words: placed.map(p => ({ word: p.word, r: p.r - b.r0, c: p.c - b.c0, dir: p.dir })),
+  };
+}
+
+const levelCache = new Map();
+function makeLevel(n) {
+  if (levelCache.has(n)) return levelCache.get(n);
+  const plan = levelPlan(n);
+  const rand = seededRandom(hashString("quiet-words-" + n));
+  const answerPool = plan.usual ? ANSWERS_WIDE : COMMON;
+  const base = baseFor(n);
+  const answers = wordsFrom(base, answerPool);
+  let best = null;
+  // Same letters every time; only the choice and placement of words varies between tries.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    // Base word first, then a shuffled mix that leans toward longer words.
+    const others = shuffle(answers.filter(w => w !== base), rand).sort((a, b) => b.length - a.length + (rand() - 0.5) * 2.5);
+    const layout = layoutWords([base, ...others], plan.max, rand);
+    const level = { n, letters: base, ...layout };
+    if (!best || layout.words.length > best.words.length) best = level;
+    if (layout.words.length >= Math.min(plan.max, plan.min + 1)) break;
+  }
+  // Wheel letters in a fixed scrambled order that doesn't spell the base word.
+  const letters = best.letters.split("");
+  for (let k = 0; k < 10 && letters.join("") === best.letters; k++) shuffle(letters, rand);
+  best.wheel = letters;
+  const inGrid = new Set(best.words.map(w => w.word));
+  best.bonus = new Set(wordsFrom(best.letters, ALL_WORDS).filter(w => !inGrid.has(w)));
+  levelCache.set(n, best);
+  return best;
+}
+
+// The cells of a word in the crossword, as "row,col" keys.
+function cellsOf(w) {
+  return [...w.word].map((_, k) => (w.dir === "across" ? `${w.r},${w.c + k}` : `${w.r + k},${w.c}`));
+}
+
+/* ---------- 3. Game state ---------- */
+// Saved progress: the level you're on, plus what you've found in it so far.
+let state = Object.assign({ level: 1, found: [], revealed: [], bonus: [], hints: 0 }, store.get("qw-state", {}));
+// Saved progress belongs to one puzzle. If a level's puzzle has changed (after an update),
+// keep the level number but start that level fresh.
+function checkSavedLevel(lv) {
+  if (state.letters && state.letters === lv.letters) return;
+  if (state.letters || state.found.some(w => !lv.words.some(x => x.word === w))) {
+    state = { level: state.level, found: [], revealed: [], bonus: [], hints: 0 };
+  }
+  state.letters = lv.letters;
+}
+let stats = Object.assign({ levelsDone: 0, bonusTotal: 0, hintsTotal: 0 }, store.get("qw-stats", {}));
+let level = null;
+const save = () => { store.set("qw-state", state); store.set("qw-stats", stats); };
+
+function wordDone(w) { return state.found.includes(w.word); }
+function levelDone() { return level.words.every(wordDone); }
+
+function submit(word) {
+  if (word.length < 3) return;
+  const target = level.words.find(w => w.word === word);
+  if (target) {
+    if (wordDone(target)) { feedback("repeat", word, "Already found"); nudge(target); return; }
+    state.found.push(word);
+    feedback("good", word, "");
+    save();
+    renderCross(cellsOf(target));
+    if (levelDone()) setTimeout(finishLevel, 650);
+    return;
+  }
+  if (level.bonus.has(word)) {
+    if (state.bonus.includes(word)) { feedback("repeat", word, "Bonus word already found"); return; }
+    state.bonus.push(word);
+    stats.bonusTotal++;
+    save();
+    feedback("bonus", word, "Bonus word!");
+    renderTools();
+    return;
+  }
+  feedback("bad", word, word.length > level.letters.length ? "" : "Not in this puzzle");
+}
+
+// Hint: show one more letter of a word you haven't found. It doesn't fill the word in.
+function hint() {
+  const open = level.words.filter(w => !wordDone(w));
+  if (!open.length) return;
+  // Start with the word that has the fewest letters showing, then reveal its first hidden letter.
+  const shown = w => cellsOf(w).filter(k => isShown(k)).length;
+  open.sort((a, b) => shown(a) / a.word.length - shown(b) / b.word.length || a.word.length - b.word.length);
+  const w = open[0];
+  const k = cellsOf(w).find(key => !isShown(key));
+  state.revealed.push(k);
+  state.hints++; stats.hintsTotal++;
+  // A word whose every letter is now showing counts as found.
+  for (const x of level.words) if (!wordDone(x) && cellsOf(x).every(isShown)) state.found.push(x.word);
+  save();
+  renderCross([k]);
+  if (levelDone()) setTimeout(finishLevel, 650);
+}
+function isShown(key) {
+  return state.revealed.includes(key) || level.words.some(w => wordDone(w) && cellsOf(w).includes(key));
+}
+
+function finishLevel() {
+  stats.levelsDone++;
+  const done = { n: level.n, words: level.words.length, bonus: state.bonus.length, hints: state.hints, extra: level.bonus.size };
+  state = { level: level.n + 1, found: [], revealed: [], bonus: [], hints: 0, letters: null };
+  save();
+  openSheet(`<span class="kicker">Level ${done.n} complete</span>
+    <h3>${done.hints ? "Nicely done." : "All on your own."}</h3>
+    <div class="result-grid">
+      <div><b>${done.words}</b><span>Words</span></div>
+      <div><b>${done.bonus}/${done.extra}</b><span>Bonus</span></div>
+      <div><b>${done.hints}</b><span>Hints</span></div>
+    </div>
+    <button class="btn primary" id="next">Level ${done.n + 1}</button>`, o => {
+      o.querySelector("#next").onclick = () => { closeSheet(); startLevel(); };
+    }, false);
+}
+
+/* ---------- 4. Drawing ---------- */
+const ICONS = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M6.5 17A2.5 2.5 0 0 0 4 19.5 2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>',
+};
+const app = document.getElementById("app");
+const layer = document.getElementById("layer");
+let tileEls = new Map();
+
+function startLevel() {
+  level = makeLevel(state.level);
+  checkSavedLevel(level);
+  save();
+  app.innerHTML = `
+    <div class="topbar">
+      <button class="icon-btn" id="home" aria-label="Back to all games">${ICONS.back}</button>
+      <h1>Quiet Words</h1><span class="spacer"></span>
+    </div>
+    <div class="progress"><span class="lvl">Level ${level.n}</span><span id="count"></span></div>
+    <div class="cross-wrap"><div class="cross" id="cross" style="--cols:${level.cols};--rows:${level.rows}"></div></div>
+    <div class="spell" id="spell" aria-live="polite"><span></span></div>
+    <div class="spell-note" id="note"></div>
+    <div class="wheel-row"><div class="wheel" id="wheel" role="group" aria-label="Letter wheel"></div></div>
+    <div class="tools" id="tools"></div>`;
+  document.getElementById("home").onclick = goHome;
+  const cross = document.getElementById("cross");
+  tileEls = new Map();
+  const keys = new Set(level.words.flatMap(cellsOf));
+  const letterAt = new Map();
+  level.words.forEach(w => cellsOf(w).forEach((k, i) => letterAt.set(k, w.word[i])));
+  for (const k of keys) {
+    const [r, c] = k.split(",").map(Number);
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.style.gridRow = r + 1; el.style.gridColumn = c + 1;
+    el.textContent = letterAt.get(k);
+    cross.appendChild(el);
+    tileEls.set(k, el);
+  }
+  renderCross([]);
+  buildWheel();
+  renderTools();
+  fitCross();
+}
+
+// Size the tiles so the whole crossword fits in the space between the title and the wheel.
+function fitCross() {
+  const wrap = document.querySelector(".cross-wrap");
+  if (!wrap || !level) return;
+  const gap = 4;
+  const w = (wrap.clientWidth - gap * (level.cols - 1)) / level.cols;
+  const h = (wrap.clientHeight - 8 - gap * (level.rows - 1)) / level.rows;
+  document.getElementById("cross").style.setProperty("--cell", Math.max(18, Math.min(42, w, h)) + "px");
+}
+window.addEventListener("resize", fitCross);
+
+function renderCross(popKeys) {
+  for (const [k, el] of tileEls) {
+    const found = level.words.some(w => wordDone(w) && cellsOf(w).includes(k));
+    el.className = "tile" + (found ? " found" : state.revealed.includes(k) ? " hinted" : "");
+  }
+  popKeys.forEach((k, i) => {
+    const el = tileEls.get(k);
+    el.style.animationDelay = i * 60 + "ms";
+    el.classList.add("pop");
+  });
+  const done = level.words.filter(wordDone).length;
+  document.getElementById("count").innerHTML = `<b>${done}</b> of <b>${level.words.length}</b> words`;
+  document.getElementById("cross").setAttribute("aria-label", `Crossword, ${done} of ${level.words.length} words found`);
+}
+function nudge(w) {
+  cellsOf(w).forEach((k, i) => { const el = tileEls.get(k); el.classList.remove("nudge"); void el.offsetWidth; el.style.animationDelay = i * 40 + "ms"; el.classList.add("nudge"); });
+}
+
+let feedbackTimer = null;
+function feedback(kind, word, note) {
+  const spell = document.getElementById("spell");
+  spell.className = "spell " + kind;
+  spell.firstElementChild.textContent = word;
+  document.getElementById("note").textContent = note;
+  clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(() => { spell.className = "spell"; spell.firstElementChild.textContent = ""; document.getElementById("note").textContent = ""; }, 900);
+}
+
+function renderTools() {
+  document.getElementById("tools").innerHTML = `
+    <button class="tool" id="t-shuffle"><span class="ico">${ICONS.shuffle}</span>Shuffle</button>
+    <button class="tool" id="t-bonus"><span class="ico">${ICONS.book}${state.bonus.length ? `<span class="badge">${state.bonus.length}</span>` : ""}</span>Bonus words</button>
+    <button class="tool" id="t-hint"><span class="ico">${ICONS.bulb}</span>Hint</button>`;
+  document.getElementById("t-shuffle").onclick = shuffleWheel;
+  document.getElementById("t-bonus").onclick = openBonus;
+  document.getElementById("t-hint").onclick = hint;
+}
+
+/* The wheel: press on a letter and drag across others to spell; drag back to undo a letter. */
+let path = [];          // indexes of wheel letters in the current word
+let dragging = false;
+let letterEls = [];
+
+function letterSpot(k, n) {
+  const angle = -Math.PI / 2 + (2 * Math.PI * k) / n;
+  const radius = n <= 4 ? 31 : n <= 6 ? 34 : 36;   // percent of the wheel
+  return { x: 50 + radius * Math.cos(angle), y: 50 + radius * Math.sin(angle) };
+}
+function buildWheel() {
+  const wheel = document.getElementById("wheel");
+  wheel.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polyline id="trail" points="" vector-effect="non-scaling-stroke"/></svg>`;
+  letterEls = level.wheel.map((ch, k) => {
+    const el = document.createElement("div");
+    el.className = "letter";
+    el.textContent = ch;
+    const p = letterSpot(k, level.wheel.length);
+    el.style.left = p.x + "%"; el.style.top = p.y + "%";
+    wheel.appendChild(el);
+    return el;
+  });
+  wheel.onpointerdown = e => { dragging = true; wheel.setPointerCapture(e.pointerId); path = []; touch(e); };
+  wheel.onpointermove = e => { if (dragging) touch(e); };
+  wheel.onpointerup = wheel.onpointercancel = () => { if (!dragging) return; dragging = false; finishWord(); };
+}
+function wheelPoint(e) {
+  const rect = document.getElementById("wheel").getBoundingClientRect();
+  return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 };
+}
+function touch(e) {
+  const p = wheelPoint(e);
+  const n = level.wheel.length;
+  const hitRadius = n <= 5 ? 12 : 10;
+  for (let k = 0; k < n; k++) {
+    const s = letterSpot(k, n);
+    if (Math.hypot(s.x - p.x, s.y - p.y) > hitRadius) continue;
+    if (path.length > 1 && path[path.length - 2] === k) path.pop();       // dragged back: undo a letter
+    else if (!path.includes(k)) path.push(k);
+    break;
+  }
+  drawPath(p);
+}
+function drawPath(pointer) {
+  const n = level.wheel.length;
+  const pts = path.map(k => letterSpot(k, n));
+  if (pointer && dragging && pts.length) pts.push(pointer);
+  document.getElementById("trail").setAttribute("points", pts.map(q => `${q.x},${q.y}`).join(" "));
+  letterEls.forEach((el, k) => el.classList.toggle("on", path.includes(k)));
+  const spell = document.getElementById("spell");
+  clearTimeout(feedbackTimer);
+  spell.className = "spell";
+  spell.firstElementChild.textContent = path.map(k => level.wheel[k]).join("");
+  document.getElementById("note").textContent = "";
+}
+function finishWord() {
+  const word = path.map(k => level.wheel[k]).join("");
+  path = [];
+  drawPath(null);
+  submit(word);
+}
+function shuffleWheel() {
+  // Keep the letters, change their places on the wheel.
+  let next = level.wheel.slice();
+  for (let k = 0; k < 6 && next.join("") === level.wheel.join(""); k++) shuffle(next, Math.random);
+  level.wheel = next;
+  const wheel = document.getElementById("wheel");
+  wheel.classList.add("shuffling");
+  letterEls.forEach((el, k) => { el.textContent = next[k]; });
+  setTimeout(() => wheel.classList.remove("shuffling"), 350);
+}
+
+/* ---------- 5. Sheets, keyboard, Android hooks, startup ---------- */
+function openSheet(html, onReady, dismissable = true) {
+  layer.innerHTML = `<div class="overlay" id="overlay"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const overlay = document.getElementById("overlay");
+  if (dismissable) overlay.addEventListener("click", e => { if (e.target === overlay) closeSheet(); });
+  overlay.dataset.dismissable = dismissable ? "1" : "";
+  if (onReady) onReady(overlay);
+}
+function closeSheet() { layer.innerHTML = ""; }
+
+function openBonus() {
+  const list = state.bonus.slice().sort();
+  openSheet(`<h3>Bonus words</h3>
+    <p>Real words from these letters that aren't in the crossword. You've found <b>${list.length}</b> of ${level.bonus.size} in this level${stats.bonusTotal ? `, and ${stats.bonusTotal} in total` : ""}.</p>
+    ${list.length ? `<div class="chips">${list.map(w => `<span>${w}</span>`).join("")}</div>` : ""}
+    <button class="btn" id="close">Close</button>`, o => (o.querySelector("#close").onclick = closeSheet));
+}
+
+function goHome() { save(); location.href = "index.html"; }
+
+// Typing works too: letters spell, Backspace removes one, Enter tries the word.
+document.addEventListener("keydown", e => {
+  if (layer.childElementCount) { if (e.key === "Escape" && document.getElementById("overlay")?.dataset.dismissable) closeSheet(); return; }
+  if (!level) return;
+  const key = e.key.toLowerCase();
+  if (/^[a-z]$/.test(key)) {
+    const k = level.wheel.findIndex((ch, i) => ch === key && !path.includes(i));
+    if (k >= 0) { path.push(k); drawPath(null); }
+  } else if (e.key === "Backspace") { path.pop(); drawPath(null); }
+  else if (e.key === "Enter") finishWord();
+  else if (e.key === "Escape") { path = []; drawPath(null); }
+  else if (e.key === " ") { e.preventDefault(); shuffleWheel(); }
+});
+
+window.androidBack = function () {
+  if (layer.childElementCount) {
+    if (document.getElementById("overlay")?.dataset.dismissable) closeSheet();
+    return true;
+  }
+  goHome();
+  return true;
+};
+window.androidPause = save;
+
+startLevel();
+</script>
+</body>
+</html>

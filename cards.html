@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eight Goals</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: "Lexend"; src: url("fonts/lexend.woff2") format("woff2"); font-weight: 300 600; font-display: swap; }
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage-grotesque.woff2") format("woff2"); font-weight: 600 800; font-display: swap; }
+
+/* Layout: a card table. Opponents across the top, the groups laid down in the middle,
+   the pile and discard, your goal, then your hand along the bottom. */
+:root {
+  --paper: #F3EFEC; --felt: #E7E0DA; --surface: #FFFFFF; --ink: #22191A; --ink-soft: #6B5E5C; --line: #D8CDC7;
+  --accent: #B8452F; --accent-ink: #FFFFFF; --accent-soft: #F6DED8; --good: #23875A; --good-soft: #D5EFE1;
+  --card-face: #FFFFFF; --card-edge: #D9D2CC; --card-back: #B8452F; --card-back-2: #9C3824;
+  --c0: #CC3A30; --c1: #2A63C9; --c2: #23864C; --c3: #A87400; --wild: #4B3B8F;
+  --shadow: 0 1px 2px rgba(34,25,26,.08), 0 6px 18px rgba(34,25,26,.10);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Lexend", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15100F; --felt: #211917; --surface: #241C1A; --ink: #F0E8E5; --ink-soft: #A3938F; --line: #3A2E2B;
+    --accent: #F08A73; --accent-ink: #15100F; --accent-soft: #4A2620; --good: #5CC38E; --good-soft: #173A29;
+    --card-face: #F4EFEC; --card-edge: #CFC6C0; --card-back: #A33E2A; --card-back-2: #84301F;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15100F; --felt: #211917; --surface: #241C1A; --ink: #F0E8E5; --ink-soft: #A3938F; --line: #3A2E2B;
+  --accent: #F08A73; --accent-ink: #15100F; --accent-soft: #4A2620; --good: #5CC38E; --good-soft: #173A29;
+  --card-face: #F4EFEC; --card-edge: #CFC6C0; --card-back: #A33E2A; --card-back-2: #84301F;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 15px; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.app {
+  max-width: 560px; margin: 0 auto; height: 100%; min-height: 600px;
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+  padding-block: 10px 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.topbar h1 { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -.01em; margin: 0; flex: 1; text-align: center; }
+.icon-btn { width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: grid; place-items: center; color: var(--ink-soft); font-size: 20px; font-weight: 600; }
+.icon-btn:hover { background: var(--felt); color: var(--ink); }
+.icon-btn svg { width: 24px; height: 24px; }
+
+/* Start screen */
+.start { display: flex; flex-direction: column; gap: 20px; padding-top: 4vh; }
+.start h2 { font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 1; margin: 0; letter-spacing: -.025em; }
+.start p { margin: 0; color: var(--ink-soft); line-height: 1.5; max-width: 60ch; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--felt); padding: 4px; border-radius: 12px; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 10px 0; font-size: 14px; color: var(--ink-soft); }
+.seg button.on { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: var(--shadow); }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.btn { border: 0; border-radius: 14px; padding: 14px 18px; font-size: 16px; font-weight: 500; background: var(--felt); min-height: 50px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+
+/* Opponents */
+.opps { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 6px; }
+.opp { background: var(--surface); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow); border: 2px solid transparent; min-width: 0; }
+.opp.turn { border-color: var(--accent); }
+.opp .who { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; font-weight: 600; }
+.opp .who small { font-weight: 400; color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+.opp .meta { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opp .meta b { color: var(--good); font-weight: 600; }
+
+/* Table */
+.table { flex: 1 1 0; min-height: 90px; overflow-y: auto; background: var(--felt); border-radius: 14px; padding: 10px; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; }
+.table .empty { margin: auto; color: var(--ink-soft); font-size: 13px; text-align: center; padding: 0 12px; }
+.group { border: 0; background: var(--surface); border-radius: 10px; padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; text-align: left; box-shadow: var(--shadow); }
+.group .glabel { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.group .gcards { display: flex; }
+.group .gcards .card { --w: 30px; margin-left: -10px; }
+.group .gcards .card:first-child { margin-left: 0; }
+.group.target { outline: 3px solid var(--good); outline-offset: 1px; cursor: pointer; }
+.group.target .glabel { color: var(--good); font-weight: 600; }
+
+/* Pile, discard and status */
+.mid { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: center; }
+.pile { border: 0; padding: 0; background: none; position: relative; border-radius: 10px; }
+.pile .count { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-size: 11px; color: #fff; font-weight: 600; }
+.pile.ready, .discard.ready { animation: glow 1.4s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 0 0 0 4px var(--accent-soft); } }
+.discard { border: 0; padding: 0; background: none; border-radius: 10px; }
+.discard .none { --w: 54px; width: var(--w); aspect-ratio: 5 / 7; border-radius: 9px; border: 2px dashed var(--line); }
+.status { font-size: 14px; line-height: 1.4; min-width: 0; }
+.status small { display: block; color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
+.status .can { color: var(--good); font-weight: 600; }
+
+.goal { background: var(--surface); border-radius: 12px; padding: 8px 10px 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+.goal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-inline: 2px; }
+.goal-head .g { min-width: 0; font-size: 13px; color: var(--ink-soft); }
+.goal-head .g b { font-family: var(--font-display); font-weight: 800; font-size: 16px; color: var(--ink); margin-right: 6px; }
+.goal-head .done { color: var(--good); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.goal-head .pts { color: var(--ink-soft); font-size: 13px; white-space: nowrap; }
+/* One box per part of the goal. Cards saved here are still in your hand. */
+.boxes { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; }
+.box { border: 2px dashed var(--line); border-radius: 10px; padding: 4px 6px 6px; min-height: 76px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.box.done { border-style: solid; border-color: var(--good); background: var(--good-soft); }
+.box.wrong { border-color: var(--accent); }
+.box.over { border-color: var(--ink); border-style: solid; background: var(--felt); }
+.box.can-drop { cursor: pointer; border-color: var(--ink-soft); }
+.bhead { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.bhead .bname { font-weight: 600; color: var(--ink); }
+.bhead .bstate { margin-left: auto; font-variant-numeric: tabular-nums; }
+.box.done .bstate { color: var(--good); font-weight: 600; }
+.box.wrong .bstate { color: var(--accent); font-weight: 600; }
+.bclear { border: 0; background: none; padding: 0 2px; font-size: 13px; color: var(--ink-soft); line-height: 1; }
+.bcards { display: flex; align-items: flex-end; min-height: 50px; padding-top: 2px; }
+.bcards .card { --w: 36px; margin-left: -14px; cursor: grab; touch-action: none; }
+.bcards .card:first-child { margin-left: 0; }
+.bcards .card.sel { transform: translateY(-6px); box-shadow: 0 0 0 2px var(--accent); }
+.bcards .empty-hint { font-size: 11px; color: var(--ink-soft); align-self: center; margin: auto; text-align: center; }
+
+/* Cards */
+.card {
+  --w: 54px; width: var(--w); aspect-ratio: 5 / 7; border-radius: calc(var(--w) * .16); flex: none; position: relative;
+  background: var(--card-face); border: 1px solid var(--card-edge); box-shadow: 0 1px 2px rgba(0,0,0,.15);
+  color: var(--suit); display: grid; place-items: center; font-weight: 600; transition: transform .12s;
+}
+.card .big { font-size: calc(var(--w) * .5); line-height: 1; font-variant-numeric: tabular-nums; }
+.card .corner { position: absolute; top: 6%; left: 9%; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: calc(var(--w) * .2); line-height: 1; }
+.card .corner svg, .card .shape svg { width: calc(var(--w) * .16); height: calc(var(--w) * .16); fill: currentColor; }
+.card .shape { position: absolute; bottom: 7%; right: 9%; }
+.card.c0 { --suit: var(--c0); } .card.c1 { --suit: var(--c1); } .card.c2 { --suit: var(--c2); } .card.c3 { --suit: var(--c3); }
+.card.wild { --suit: var(--wild); background: linear-gradient(160deg, var(--card-face) 55%, color-mix(in srgb, var(--wild) 14%, var(--card-face))); }
+.card.wild .big { font-size: calc(var(--w) * .46); }
+.card.back { background: repeating-linear-gradient(45deg, var(--card-back) 0 6px, var(--card-back-2) 6px 12px); border-color: var(--card-back-2); }
+.card .runval { position: absolute; bottom: 4%; left: 0; right: 0; text-align: center; font-size: calc(var(--w) * .26); color: var(--wild); }
+
+.hand { display: flex; justify-content: center; padding-top: 14px; min-height: 100px; }
+.hand .card { --w: 58px; margin-left: var(--overlap); cursor: grab; touch-action: none; }
+.hand.over { background: var(--felt); border-radius: 12px; }
+.card.lifting { opacity: .3; }
+.card.ghost { position: fixed; z-index: 40; pointer-events: none; transform: translate(-50%, -60%) rotate(-4deg); box-shadow: 0 10px 24px rgba(0,0,0,.3); --w: 58px; }
+.hand .card:first-child { margin-left: 0; }
+.hand .card.sel { transform: translateY(-14px); box-shadow: 0 0 0 3px var(--accent), 0 6px 14px rgba(0,0,0,.2); }
+.hand .card.fits::after { content: ""; position: absolute; top: -6px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--good); }
+.actions { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; }
+.actions .btn { min-height: 46px; padding: 10px 12px; font-size: 15px; }
+
+/* Sheets */
+.overlay { position: fixed; inset: 0; z-index: 20; background: rgba(15,10,9,.45); display: flex; align-items: flex-end; justify-content: center;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); animation: fade .15s ease-out; }
+@media (min-width: 600px) { .overlay { align-items: center; } }
+@keyframes fade { from { opacity: 0; } }
+.sheet { width: 100%; max-width: 460px; background: var(--surface); border-radius: 20px; padding: 22px 20px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; max-height: 86vh; overflow-y: auto; animation: rise .2s ease-out; }
+@keyframes rise { from { transform: translateY(16px); opacity: .6; } }
+.sheet h3 { font-family: var(--font-display); font-weight: 800; font-size: 24px; margin: 0; letter-spacing: -.015em; }
+.sheet h4 { margin: 4px 0 0; font-size: 15px; }
+.sheet p, .sheet li { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+.sheet ol, .sheet ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.sheet li.now { color: var(--ink); font-weight: 500; }
+.sheet li.past { text-decoration: line-through; }
+.kicker { color: var(--accent); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+.scores { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.scores th { text-align: left; font-weight: 400; color: var(--ink-soft); font-size: 12px; padding: 0 4px 6px; }
+.scores td { padding: 8px 4px; border-top: 1px solid var(--line); }
+.scores td.num, .scores th.num { text-align: right; }
+.scores .up { color: var(--good); font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 30; max-width: calc(100% - 32px); text-align: center; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-height: 720px) { .hand .card { --w: 50px; } .app { gap: 8px; } .opp { padding: 6px 8px; } .box { min-height: 64px; } .bcards .card { --w: 30px; } .bcards { min-height: 42px; } }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="layer"></div>
+<script>
+"use strict";
+/* =====================================================================
+   Eight Goals: a rummy-style card game against the computer.
+   Work through eight goals (sets, runs and colour groups) before the
+   other players do, and keep the cards left in your hand low.
+
+   Sections:
+     1. Small helpers (shared with Sudoku)
+     2. Cards, goals, rules and the computer players
+     3. Your turn (selecting, laying down, adding, discarding)
+     4. Drawing the table
+     5. Sheets, Android hooks and startup
+   ===================================================================== */
+
+/* ---------- 1. Helpers ---------- */
+const store = {
+  get(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  remove(key) { try { localStorage.removeItem(key); } catch {} },
+};
+
+// A small seeded random number generator, so the daily puzzle is the same for everyone each day.
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shuffle(list, rand) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+function formatTime(totalSeconds) {
+  const s = Math.floor(totalSeconds % 60), m = Math.floor(totalSeconds / 60) % 60, h = Math.floor(totalSeconds / 3600);
+  const pad = n => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function bitCount(m) { let n = 0; while (m) { m &= m - 1; n++; } return n; }
+
+const capitalize = s => s[0].toUpperCase() + s.slice(1);
+const andList = a => (a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]);
+
+/* ---------- 2. Cards, goals and rules ----------
+   Deck: numbers 1-12 in four colours, two of each, plus 8 wild stars (104 cards).
+   Each player works through the same eight goals in order. On your turn you draw
+   (from the pile or the discard), may lay down your whole goal at once, may then add
+   cards to any groups already on the table, and finish by discarding one card.
+   The round ends when someone runs out of cards. */
+const COLORS = [
+  { name: "red", shape: "circle" }, { name: "blue", shape: "square" },
+  { name: "green", shape: "triangle" }, { name: "gold", shape: "diamond" },
+];
+const WILD = 0;
+const HAND_SIZE = 10;
+
+const GOALS = [
+  { text: "2 sets of 3", parts: [{ kind: "set", size: 3 }, { kind: "set", size: 3 }] },
+  { text: "1 run of 5", parts: [{ kind: "run", size: 5 }] },
+  { text: "1 set of 3 and 1 run of 4", parts: [{ kind: "set", size: 3 }, { kind: "run", size: 4 }] },
+  { text: "6 cards of one colour", parts: [{ kind: "color", size: 6 }] },
+  { text: "3 sets of 3", parts: [{ kind: "set", size: 3 }, { kind: "set", size: 3 }, { kind: "set", size: 3 }] },
+  { text: "1 run of 4 and 4 cards of one colour", parts: [{ kind: "run", size: 4 }, { kind: "color", size: 4 }] },
+  { text: "1 run of 7 and 1 set of 2", parts: [{ kind: "run", size: 7 }, { kind: "set", size: 2 }] },
+  { text: "2 runs of 5", parts: [{ kind: "run", size: 5 }, { kind: "run", size: 5 }] },
+];
+const PART_WORDS = {
+  set: "a set: cards with the same number",
+  run: "a run: numbers in a row, any colours",
+  color: "cards that are all the same colour",
+};
+
+// A card is a small object: { id, n } with n 1-12, plus c = colour index; wilds have n = 0.
+function newDeck(rand) {
+  const cards = [];
+  let id = 0;
+  for (let copy = 0; copy < 2; copy++) for (let c = 0; c < 4; c++) for (let n = 1; n <= 12; n++) cards.push({ id: id++, n, c });
+  for (let k = 0; k < 8; k++) cards.push({ id: id++, n: WILD, c: -1 });
+  return shuffle(cards, rand);
+}
+const isWild = card => card.n === WILD;
+const cardPoints = card => (isWild(card) ? 25 : card.n >= 10 ? 10 : 5);
+const handPoints = hand => hand.reduce((a, c) => a + cardPoints(c), 0);
+
+/* Find the best way to make a goal from some cards.
+   Returns { missing, groups } where missing = how many more cards the goal still needs
+   (0 means it can be laid down now) and groups = the cards for each part.
+   With allowMissing false, only complete answers count. Every group needs at least one
+   real (non-wild) card, so a set or colour group always says what it is. */
+function solveGoal(cards, parts, allowMissing) {
+  const order = parts.map((p, i) => i).sort((a, b) => ["run", "set", "color"].indexOf(parts[a].kind) - ["run", "set", "color"].indexOf(parts[b].kind));
+  let best = null;
+  const chosen = new Array(parts.length);
+  function options(part, free) {
+    const wilds = free.filter(isWild), naturals = free.filter(c => !isWild(c));
+    const out = [];
+    if (part.kind === "set" || part.kind === "color") {
+      const keys = part.kind === "set" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [0, 1, 2, 3];
+      for (const key of keys) {
+        const match = naturals.filter(c => (part.kind === "set" ? c.n === key : c.c === key)).slice(0, part.size);
+        if (!match.length) continue;
+        const w = wilds.slice(0, part.size - match.length);
+        out.push({ kind: part.kind, key, cards: [...match, ...w], missing: part.size - match.length - w.length });
+      }
+    } else {
+      for (let start = 1; start + part.size - 1 <= 12; start++) {
+        const cards = [], used = new Set();
+        let wildsLeft = wilds.slice(), missing = 0, real = 0;
+        for (let v = start; v < start + part.size; v++) {
+          const c = naturals.find(x => x.n === v && !used.has(x.id));
+          if (c) { cards.push(c); used.add(c.id); real++; }
+          else if (wildsLeft.length) cards.push(wildsLeft.shift());
+          else { cards.push(null); missing++; }
+        }
+        if (real) out.push({ kind: "run", key: start, cards, missing });
+      }
+    }
+    return out.filter(o => allowMissing || o.missing === 0);
+  }
+  (function step(k, free, missing) {
+    if (best && missing >= best.missing) return;
+    if (k === order.length) { best = { missing, groups: chosen.map(g => ({ ...g, cards: g.cards.filter(Boolean) })) }; return; }
+    const part = parts[order[k]];
+    const opts = options(part, free).sort((a, b) => a.missing - b.missing);
+    if (!opts.length && allowMissing) {
+      chosen[order[k]] = { kind: part.kind, key: null, cards: [], missing: part.size };
+      step(k + 1, free, missing + part.size);
+    }
+    for (const o of opts.slice(0, 6)) {
+      chosen[order[k]] = o;
+      const ids = new Set(o.cards.filter(Boolean).map(c => c.id));
+      step(k + 1, free.filter(c => !ids.has(c.id)), missing + o.missing);
+      if (best && best.missing === 0) return;
+    }
+  })(0, cards, 0);
+  return best || { missing: Infinity, groups: [] };
+}
+
+/* Do these cards (in any order) make one group of this kind with at least minSize cards?
+   Returns the group ready to lay down ({ kind, key, cards in order }) or null. */
+function groupFromCards(kind, cards, minSize) {
+  if (cards.length < minSize) return null;
+  const real = cards.filter(c => !isWild(c)), wilds = cards.filter(isWild);
+  if (!real.length) return null;
+  if (kind === "set") return real.every(c => c.n === real[0].n) ? { kind, key: real[0].n, cards: [...real, ...wilds] } : null;
+  if (kind === "color") return real.every(c => c.c === real[0].c) ? { kind, key: real[0].c, cards: [...real, ...wilds] } : null;
+  const nums = real.map(c => c.n).sort((a, b) => a - b);
+  if (new Set(nums).size !== nums.length) return null;
+  const len = cards.length;
+  for (let start = Math.max(1, nums[nums.length - 1] - len + 1); start <= Math.min(nums[0], 13 - len); start++) {
+    const spare = wilds.slice(), ordered = [];
+    for (let v = start; v < start + len; v++) ordered.push(real.find(c => c.n === v) || spare.shift());
+    if (ordered.every(Boolean)) return { kind, key: start, cards: ordered };
+  }
+  return null;
+}
+// How a goal box is doing: "empty", "done" (ready to lay down), "partial" (fine so far) or "wrong".
+function boxState(part, cards) {
+  if (!cards.length) return "empty";
+  if (groupFromCards(part.kind, cards, part.size)) return "done";
+  const real = cards.filter(c => !isWild(c));
+  if (!real.length) return cards.length <= part.size ? "partial" : "wrong";
+  if (part.kind === "run") {
+    const nums = real.map(c => c.n);
+    const ok = new Set(nums).size === nums.length && Math.max(...nums) - Math.min(...nums) < part.size && cards.length <= part.size;
+    return ok ? "partial" : "wrong";
+  }
+  return groupFromCards(part.kind, cards, 1) ? "partial" : "wrong";
+}
+const partLabel = part => `${part.kind === "set" ? "Set" : part.kind === "run" ? "Run" : "Colour"} of ${part.size}`;
+
+// A laid-down group on the table. Runs remember where they start so wilds have a value.
+function makeGroup(owner, g) {
+  if (g.kind === "run") return { owner, kind: "run", start: g.key, cards: g.cards.slice() };
+  return { owner, kind: g.kind, key: g.key, cards: g.cards.slice() };
+}
+// Can this card be added to the group? Returns where it goes, or null.
+function fitsGroup(group, card) {
+  if (group.kind === "set") return isWild(card) || card.n === group.key ? "end" : null;
+  if (group.kind === "color") return isWild(card) || card.c === group.key ? "end" : null;
+  const low = group.start, high = group.start + group.cards.length - 1;
+  if (isWild(card)) return high < 12 ? "end" : low > 1 ? "start" : null;
+  if (card.n === high + 1) return "end";
+  if (card.n === low - 1) return "start";
+  return null;
+}
+function addToGroup(group, card, where) {
+  if (where === "start") { group.cards.unshift(card); if (group.kind === "run") group.start--; }
+  else group.cards.push(card);
+}
+const groupLabel = g => (g.kind === "set" ? `Set of ${g.key}s` : g.kind === "color" ? `${capitalize(COLORS[g.key].name)} cards` : `Run ${g.start}–${g.start + g.cards.length - 1}`);
+
+/* ---------- Game flow ---------- */
+const PLAYER_NAMES = ["You", "Ada", "Ben", "Cleo"];
+
+function newMatch(opponents, rand) {
+  const players = PLAYER_NAMES.slice(0, opponents + 1).map((name, i) => ({ name, human: i === 0, goal: 0, score: 0 }));
+  const match = { players, round: 0, dealer: players.length - 1, over: false, winners: [] };
+  startRound(match, rand);
+  return match;
+}
+
+function startRound(match, rand) {
+  match.round++;
+  match.dealer = (match.dealer + 1) % match.players.length;
+  const deck = newDeck(rand);
+  for (const p of match.players) { p.hand = deck.splice(0, HAND_SIZE); p.laid = false; p.laidThisRound = false; }
+  match.deck = deck;
+  match.discard = [deck.pop()];
+  match.table = [];
+  match.turn = (match.dealer + 1) % match.players.length;
+  match.phase = "draw";            // "draw" -> "play" -> next player's "draw"
+  match.roundOver = false;
+  match.log = [];
+}
+
+function drawCard(match, from, rand) {
+  const p = match.players[match.turn];
+  let card;
+  if (from === "discard") {
+    card = match.discard.pop();
+  } else {
+    if (!match.deck.length) {
+      // Pile ran out: shuffle the discards (except the top one) into a new pile.
+      const top = match.discard.pop();
+      match.deck = shuffle(match.discard, rand);
+      match.discard = [top];
+    }
+    card = match.deck.pop();
+  }
+  p.hand.push(card);
+  match.phase = "play";
+  return card;
+}
+const canTakeDiscard = match => match.discard.length > 0 && !isWild(match.discard[match.discard.length - 1]);
+
+function layDown(match, groups) {
+  const p = match.players[match.turn];
+  const ids = new Set(groups.flatMap(g => g.cards.map(c => c.id)));
+  p.hand = p.hand.filter(c => !ids.has(c.id));
+  groups.forEach(g => match.table.push(makeGroup(match.turn, g)));
+  p.laid = true;
+  checkOut(match);
+}
+function hitGroup(match, cardId, groupIndex) {
+  const p = match.players[match.turn];
+  const card = p.hand.find(c => c.id === cardId);
+  const group = match.table[groupIndex];
+  const where = card && group && p.laid && fitsGroup(group, card);
+  if (!where) return false;
+  addToGroup(group, card, where);
+  p.hand = p.hand.filter(c => c.id !== cardId);
+  checkOut(match);
+  return true;
+}
+function discardCard(match, cardId) {
+  const p = match.players[match.turn];
+  const card = p.hand.find(c => c.id === cardId);
+  p.hand = p.hand.filter(c => c.id !== cardId);
+  match.discard.push(card);
+  if (!checkOut(match)) {
+    match.turn = (match.turn + 1) % match.players.length;
+    match.phase = "draw";
+  }
+}
+// A player with no cards left ends the round.
+function checkOut(match) {
+  const p = match.players[match.turn];
+  if (p.hand.length) return false;
+  endRound(match, match.turn);
+  return true;
+}
+function endRound(match, outIndex) {
+  match.roundOver = true;
+  match.outPlayer = outIndex;
+  match.roundResults = match.players.map(p => {
+    const points = handPoints(p.hand);
+    p.score += points;
+    const finished = p.laid;
+    if (finished) p.goal++;
+    return { name: p.name, points, finished, goal: p.goal };
+  });
+  const done = match.players.filter(p => p.goal >= GOALS.length);
+  if (done.length) {
+    const low = Math.min(...done.map(p => p.score));
+    match.over = true;
+    match.winners = match.players.map((p, i) => i).filter(i => match.players[i].goal >= GOALS.length && match.players[i].score === low);
+  }
+}
+
+/* ---------- Computer players ----------
+   They play sensibly but not perfectly: they count how far they are from their goal,
+   keep cards that help, and get rid of high cards that don't. */
+function missingFor(hand, goal) { return solveGoal(hand, GOALS[goal].parts, true).missing; }
+
+// How useful is a card to keep? Lower = better to throw away.
+function keepValue(p, card, table) {
+  if (isWild(card)) return 100;
+  if (p.laid) return table.some(g => fitsGroup(g, card)) ? 50 : -cardPoints(card);
+  const without = p.hand.filter(c => c.id !== card.id);
+  const before = missingFor(p.hand, p.goal), after = missingFor(without, p.goal);
+  // Cards that pair up with others are worth keeping even when the count doesn't change yet.
+  const partners = p.hand.filter(c => c.id !== card.id && !isWild(c) && (c.n === card.n || Math.abs(c.n - card.n) <= 2 || c.c === card.c)).length;
+  return (after - before) * 20 + partners - cardPoints(card) / 10;
+}
+
+function aiChooseDraw(match) {
+  const p = match.players[match.turn];
+  if (!canTakeDiscard(match)) return "deck";
+  const top = match.discard[match.discard.length - 1];
+  if (p.laid) return match.table.some(g => fitsGroup(g, top)) ? "discard" : "deck";
+  const now = missingFor(p.hand, p.goal);
+  // Would taking it (and then throwing away the worst card) bring the goal closer?
+  const withTop = [...p.hand, top];
+  return missingFor(withTop, p.goal) < now ? "discard" : "deck";
+}
+
+// One computer action at a time, so the screen can show each move. Returns a short description.
+function aiStep(match, rand) {
+  const p = match.players[match.turn];
+  if (match.phase === "draw") {
+    const from = aiChooseDraw(match);
+    const card = drawCard(match, from, rand);
+    return { text: from === "discard" ? `${p.name} takes the ${cardName(card)}` : `${p.name} draws from the pile`, kind: "draw", from };
+  }
+  if (!p.laid) {
+    const sol = solveGoal(p.hand, GOALS[p.goal].parts, false);
+    if (sol.missing === 0) {
+      layDown(match, sol.groups);
+      return { text: `${p.name} lays down goal ${p.goal + 1}`, kind: "lay" };
+    }
+  } else {
+    for (const card of p.hand) {
+      const gi = match.table.findIndex(g => fitsGroup(g, card));
+      if (gi >= 0 && (p.hand.length > 1 || true)) {
+        hitGroup(match, card.id, gi);
+        return { text: `${p.name} adds a ${cardName(card)} to ${match.players[match.table[gi].owner].name === "You" ? "your" : match.players[match.table[gi].owner].name + "'s"} ${groupLabel(match.table[gi]).toLowerCase()}`, kind: "hit" };
+      }
+    }
+  }
+  // Throw away the least useful card (never a wild if there's anything else).
+  const ranked = p.hand.slice().sort((a, b) => keepValue(p, a, match.table) - keepValue(p, b, match.table) + (rand() - 0.5) * 0.4);
+  const card = ranked[0];
+  discardCard(match, card.id);
+  return { text: `${p.name} discards the ${cardName(card)}`, kind: "discard" };
+}
+
+function cardName(card) {
+  return isWild(card) ? "wild" : `${COLORS[card.c].name} ${card.n}`;
+}
+
+/* ---------- 3. Your turn ---------- */
+let match = store.get("qc-match", null);
+let stats = Object.assign({ played: 0, won: 0, bestScore: null }, store.get("qc-stats", {}));
+let opponents = store.get("qc-opponents", 2);
+let sortBy = store.get("qc-sort", "number");
+let selected = new Set();      // ids of your selected cards
+let aiTimer = null;
+let lastAction = "";
+const save = () => { store.set("qc-match", match); store.set("qc-stats", stats); };
+const me = () => match.players[0];
+const myTurn = () => match && !match.roundOver && match.turn === 0;
+const AI_DELAY = 750;
+
+function startMatch() {
+  match = newMatch(opponents, Math.random);
+  stats.played++;
+  selected.clear();
+  lastAction = "";
+  save();
+  showTable();
+}
+
+function takeCard(from) {
+  if (!myTurn() || match.phase !== "draw") return;
+  if (from === "discard" && !canTakeDiscard(match)) { toast(match.discard.length ? "Wild cards can't be taken from the discard" : "The discard is empty"); return; }
+  const card = drawCard(match, from, Math.random);
+  lastAction = from === "discard" ? `You took the ${cardName(card)}` : `You drew the ${cardName(card)}`;
+  selected.clear();
+  save();
+  render();
+}
+function selectedCards() { return me().hand.filter(c => selected.has(c.id)); }
+
+/* Your arrangement: the order of the cards in your hand, and which cards you've saved in
+   each goal box. It's kept with the game, and only changes how your cards are shown. */
+const sorters = {
+  number: (a, b) => (isWild(a) - isWild(b)) || a.n - b.n || a.c - b.c,
+  colour: (a, b) => (isWild(a) - isWild(b)) || a.c - b.c || a.n - b.n,
+};
+function layoutOf() {
+  const p = me();
+  const parts = GOALS[Math.min(p.goal, GOALS.length - 1)].parts;
+  let L = p.layout;
+  if (!L || L.round !== match.round || L.goal !== p.goal || L.boxes.length !== parts.length) {
+    L = p.layout = { round: match.round, goal: p.goal, boxes: parts.map(() => []), order: p.hand.slice().sort(sorters[sortBy]).map(c => c.id) };
+  }
+  const inHand = new Set(p.hand.map(c => c.id));
+  L.boxes = L.boxes.map(b => b.filter(id => inHand.has(id)));
+  if (p.laid && L.boxes.some(b => b.length)) {   // goal is down: anything left in the boxes goes back to the hand
+    L.order.unshift(...L.boxes.flat());
+    L.boxes = L.boxes.map(() => []);
+  }
+  const boxed = new Set(L.boxes.flat());
+  L.order = L.order.filter(id => inHand.has(id) && !boxed.has(id));
+  for (const c of p.hand) if (!boxed.has(c.id) && !L.order.includes(c.id)) L.order.push(c.id);   // new cards go on the right
+  return L;
+}
+const cardById = id => me().hand.find(c => c.id === id);
+// Move one of your cards into a goal box, or to a spot in your hand.
+function moveCard(id, dest) {
+  const L = layoutOf();
+  L.boxes = L.boxes.map(b => b.filter(x => x !== id));
+  L.order = L.order.filter(x => x !== id);
+  if (dest.box !== undefined) L.boxes[dest.box].push(id);
+  else L.order.splice(Math.max(0, Math.min(dest.index, L.order.length)), 0, id);
+  save();
+}
+function clearBox(k) {
+  const L = layoutOf();
+  L.order.push(...L.boxes[k]);
+  L.boxes[k] = [];
+  save();
+  render();
+}
+function sortHand() {
+  const L = layoutOf();
+  L.order = L.order.map(cardById).sort(sorters[sortBy]).map(c => c.id);
+  sortBy = sortBy === "number" ? "colour" : "number";   // next tap sorts the other way
+  store.set("qc-sort", sortBy);
+  save();
+  render();
+}
+
+function tryLayDown() {
+  const goal = GOALS[me().goal];
+  if (!selected.size) return layDownFromBoxes(goal);
+  const sol = solveGoal(selectedCards(), goal.parts, false);
+  if (sol.missing !== 0) {
+    const close = solveGoal(selectedCards(), goal.parts, true);
+    toast(close.missing < Infinity ? `Not yet: those cards are ${close.missing} short of ${goal.text}` : `Those cards don't make ${goal.text}`);
+    return;
+  }
+  layDown(match, sol.groups);
+  lastAction = `You laid down goal ${me().goal + 1}`;
+  selected.clear();
+  afterMyMove();
+}
+// Lay down exactly what you've arranged in the goal boxes.
+function layDownFromBoxes(goal) {
+  const L = layoutOf();
+  const groups = goal.parts.map((part, k) => groupFromCards(part.kind, L.boxes[k].map(cardById), part.size));
+  const k = groups.findIndex(g => !g);
+  if (k >= 0) {
+    const part = goal.parts[k], have = L.boxes[k].length;
+    toast(boxState(part, L.boxes[k].map(cardById)) === "wrong" ? `The ${partLabel(part).toLowerCase()} box has a card that doesn't belong` : `The ${partLabel(part).toLowerCase()} box needs ${part.size - have} more card${part.size - have === 1 ? "" : "s"}`);
+    return;
+  }
+  layDown(match, groups);
+  lastAction = `You laid down goal ${me().goal + 1}`;
+  selected.clear();
+  afterMyMove();
+}
+function tryHit(groupIndex) {
+  const cards = selectedCards();
+  if (cards.length !== 1) return;
+  if (!hitGroup(match, cards[0].id, groupIndex)) { toast("That card doesn't fit there"); return; }
+  lastAction = `You added the ${cardName(cards[0])}`;
+  selected.clear();
+  afterMyMove();
+}
+function tryDiscard() {
+  const cards = selectedCards();
+  if (cards.length !== 1) { toast("Select one card to discard"); return; }
+  discardCard(match, cards[0].id);
+  lastAction = `You discarded the ${cardName(cards[0])}`;
+  selected.clear();
+  afterMyMove();
+}
+function afterMyMove() {
+  save();
+  render();
+  if (match.roundOver) setTimeout(openRoundEnd, 600);
+  else if (!myTurn()) runComputers();
+}
+
+// Computer players move one action at a time, with a pause so you can follow along.
+function runComputers() {
+  clearTimeout(aiTimer);
+  if (!match || match.roundOver || myTurn()) return;
+  aiTimer = setTimeout(() => {
+    const result = aiStep(match, Math.random);
+    lastAction = result.text;
+    save();
+    render();
+    if (match.roundOver) setTimeout(openRoundEnd, 700);
+    else runComputers();
+  }, AI_DELAY);
+}
+
+/* ---------- 4. Drawing ---------- */
+const SHAPES = {
+  circle: '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4.2"/></svg>',
+  square: '<svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1"/></svg>',
+  triangle: '<svg viewBox="0 0 10 10"><path d="M5 .8 9.4 9H.6z"/></svg>',
+  diamond: '<svg viewBox="0 0 10 10"><path d="M5 .3 9.5 5 5 9.7.5 5z"/></svg>',
+};
+const ICONS = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+};
+function cardHTML(card, extra = "", attrs = "") {
+  if (isWild(card)) return `<div class="card wild ${extra}" ${attrs} aria-label="Wild card"><span class="big">★</span></div>`;
+  const shape = SHAPES[COLORS[card.c].shape];
+  return `<div class="card c${card.c} ${extra}" ${attrs} aria-label="${cardName(card)}"><span class="corner">${card.n}${shape}</span><span class="big">${card.n}</span><span class="shape">${shape}</span></div>`;
+}
+const app = document.getElementById("app");
+const layer = document.getElementById("layer");
+
+function showStart() {
+  clearTimeout(aiTimer);
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="home" aria-label="Back to all games">${ICONS.back}</button><h1></h1><button class="icon-btn" id="help" aria-label="How to play">?</button></div>
+    <div class="start">
+      <h2>Eight Goals</h2>
+      <p>A rummy game against the computer. Everyone works through the same eight goals: sets, runs and cards of one colour. Finish all eight first, with the fewest points left in your hand.</p>
+      <div style="display:flex;gap:8px;justify-content:center">${cardHTML({ n: 7, c: 0 })}${cardHTML({ n: 7, c: 1 })}${cardHTML({ n: 7, c: 2 })}${cardHTML({ n: WILD, c: -1 })}${cardHTML({ n: 9, c: 3 })}</div>
+      <div><div class="label" style="margin-bottom:6px">Computer players</div>
+        <div class="seg" role="radiogroup">${[1, 2, 3].map(n => `<button role="radio" aria-checked="${n === opponents}" class="${n === opponents ? "on" : ""}" data-n="${n}">${n}</button>`).join("")}</div></div>
+      ${match && !match.over ? `<button class="btn primary" id="resume">Continue · Goal ${me().goal + 1}, round ${match.round}</button>` : ""}
+      <button class="btn ${match && !match.over ? "" : "primary"}" id="start">New game</button>
+      <p style="font-size:13px">Games played: ${stats.played} · won: ${stats.won}${stats.bestScore != null ? ` · best winning score: ${stats.bestScore}` : ""}</p>
+    </div>`;
+  document.getElementById("home").onclick = goHome;
+  document.getElementById("help").onclick = openHelp;
+  app.querySelectorAll("[data-n]").forEach(b => (b.onclick = () => { opponents = +b.dataset.n; store.set("qc-opponents", opponents); showStart(); }));
+  document.getElementById("start").onclick = () => {
+    if (match && !match.over) {
+      openSheet(`<h3>Start a new game?</h3><p>Your current game (goal ${me().goal + 1}, round ${match.round}) will be lost.</p>
+        <button class="btn primary" id="yes">Start new game</button><button class="btn" id="no">Keep playing</button>`, o => {
+          o.querySelector("#yes").onclick = () => { closeSheet(); startMatch(); };
+          o.querySelector("#no").onclick = () => { closeSheet(); showTable(); };
+        });
+    } else startMatch();
+  };
+  document.getElementById("resume")?.addEventListener("click", showTable);
+}
+
+function showTable() {
+  app.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="home" aria-label="Back">${ICONS.back}</button><h1>Eight Goals</h1><button class="icon-btn" id="help" aria-label="How to play">?</button></div>
+    <div class="opps" id="opps"></div>
+    <div class="table" id="table"></div>
+    <div class="mid">
+      <button class="pile" id="pile" aria-label="Draw from the pile"></button>
+      <button class="discard" id="discard" aria-label="Take the discard"></button>
+      <div class="status" id="status" aria-live="polite"></div>
+    </div>
+    <div class="goal" id="goal"></div>
+    <div class="hand" id="hand"></div>
+    <div class="actions" id="actions"></div>`;
+  document.getElementById("home").onclick = () => { clearTimeout(aiTimer); save(); showStart(); };
+  document.getElementById("help").onclick = openHelp;
+  document.getElementById("pile").onclick = () => takeCard("deck");
+  document.getElementById("discard").onclick = () => takeCard("discard");
+  document.getElementById("table").addEventListener("click", e => {
+    const g = e.target.closest(".group.target");
+    if (g) tryHit(+g.dataset.g);
+  });
+  for (const zone of [document.getElementById("hand"), document.getElementById("goal")]) zone.addEventListener("pointerdown", startDrag);
+  // Without dragging: select cards, then tap a box to put them there.
+  document.getElementById("goal").addEventListener("click", e => {
+    const clear = e.target.closest("[data-clear]");
+    if (clear) { clearBox(+clear.dataset.clear); return; }
+    const box = e.target.closest(".box");
+    if (!box || e.target.closest(".card") || !selected.size) return;
+    for (const id of selected) moveCard(id, { box: +box.dataset.box });
+    selected.clear();
+    render();
+  });
+  render();
+  if (match.roundOver) openRoundEnd();
+  else runComputers();
+}
+
+/* Dragging cards: press on a card and move it to another spot in your hand or into a goal box.
+   A press without moving selects the card instead. */
+let drag = null, renderWaiting = false;
+function toggleSelect(id) {
+  if (!myTurn() || match.phase !== "play") return;
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  render();
+}
+function startDrag(e) {
+  const el = e.target.closest(".card[data-id]");
+  if (!el || e.button > 0) return;
+  drag = { id: +el.dataset.id, el, x: e.clientX, y: e.clientY, moved: false, ghost: null };
+}
+function dropTarget(x, y, dragId) {
+  const under = document.elementFromPoint(x, y);
+  const box = under && under.closest(".box");
+  if (box) return { box: +box.dataset.box, el: box };
+  const hand = document.getElementById("hand");
+  const r = hand.getBoundingClientRect();
+  if (y > r.top - 40 || (under && under.closest("#hand, .actions"))) {
+    const others = [...hand.querySelectorAll(".card[data-id]")].filter(c => +c.dataset.id !== dragId);
+    let index = others.findIndex(c => { const b = c.getBoundingClientRect(); return x < b.left + b.width / 2; });
+    if (index < 0) index = others.length;
+    return { index, el: hand };
+  }
+  return null;
+}
+window.addEventListener("pointermove", e => {
+  if (!drag) return;
+  if (!drag.moved) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
+    drag.moved = true;
+    drag.ghost = drag.el.cloneNode(true);
+    drag.ghost.className = drag.el.className.replace(/\b(sel|fits)\b/g, "") + " ghost";
+    document.body.appendChild(drag.ghost);
+    drag.el.classList.add("lifting");
+  }
+  drag.ghost.style.left = e.clientX + "px";
+  drag.ghost.style.top = e.clientY + "px";
+  const t = dropTarget(e.clientX, e.clientY, drag.id);
+  document.querySelectorAll(".box.over, .hand.over").forEach(x => x.classList.remove("over"));
+  if (t) t.el.classList.add("over");
+});
+function endDrag(e, cancelled) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (d.ghost) d.ghost.remove();
+  document.querySelectorAll(".box.over, .hand.over").forEach(x => x.classList.remove("over"));
+  if (!d.moved) { if (!cancelled) toggleSelect(d.id); return; }
+  const t = !cancelled && dropTarget(e.clientX, e.clientY, d.id);
+  if (t) moveCard(d.id, t.box !== undefined ? { box: t.box } : { index: t.index });
+  renderWaiting = false;
+  render();
+}
+window.addEventListener("pointerup", e => endDrag(e, false));
+window.addEventListener("pointercancel", e => endDrag(e, true));
+
+function render() {
+  if (!document.getElementById("hand")) return;
+  // Don't redraw under a card that's being dragged; catch up when it's dropped.
+  if (drag && drag.moved) { renderWaiting = true; return; }
+  const p = me();
+  const L = layoutOf();
+  // Opponents
+  const opps = match.players.slice(1);
+  const oppEl = document.getElementById("opps");
+  oppEl.style.setProperty("--n", opps.length);
+  oppEl.innerHTML = opps.map((o, k) => `
+    <div class="opp ${match.turn === k + 1 && !match.roundOver ? "turn" : ""}">
+      <div class="who">${o.name}<small>${o.hand.length} card${o.hand.length === 1 ? "" : "s"}</small></div>
+      <div class="meta">Goal ${Math.min(o.goal + 1, GOALS.length)}${o.laid ? " · <b>laid down</b>" : ""} · ${o.score} pts</div>
+    </div>`).join("");
+  // Table groups
+  const one = selectedCards().length === 1 ? selectedCards()[0] : null;
+  const canHit = myTurn() && match.phase === "play" && p.laid && one;
+  const tableEl = document.getElementById("table");
+  tableEl.innerHTML = match.table.length ? match.table.map((g, i) => {
+    const target = canHit && fitsGroup(g, one);
+    const owner = match.players[g.owner].name;
+    const cards = g.cards.map((c, k) => cardHTML(c, "", "") .replace("</div>", g.kind === "run" && isWild(c) ? `<span class="runval">${g.start + k}</span></div>` : "</div>")).join("");
+    return `<button class="group ${target ? "target" : ""}" data-g="${i}" ${target ? "" : "tabindex=\"-1\""}><span class="glabel">${owner === "You" ? "Yours" : owner} · ${groupLabel(g)}${target ? " · tap to add" : ""}</span><span class="gcards">${cards}</span></button>`;
+  }).join("") : `<div class="empty">Laid-down goals appear here. Once you've laid yours down, you can add cards to any group.</div>`;
+  // Pile and discard
+  const drawing = myTurn() && match.phase === "draw";
+  const pile = document.getElementById("pile");
+  pile.className = "pile" + (drawing ? " ready" : "");
+  pile.innerHTML = `<div class="card back"></div><span class="count">${match.deck.length}</span>`;
+  const top = match.discard[match.discard.length - 1];
+  const dis = document.getElementById("discard");
+  dis.className = "discard" + (drawing && canTakeDiscard(match) ? " ready" : "");
+  dis.innerHTML = top ? cardHTML(top) : `<div class="none"></div>`;
+  // Status line
+  let status;
+  if (match.roundOver) status = "Round over";
+  else if (!myTurn()) status = `${match.players[match.turn].name}'s turn…`;
+  else if (match.phase === "draw") status = "<b>Your turn.</b> Take the top card from the pile or the discard.";
+  else if (!p.laid) {
+    const can = solveGoal(p.hand, GOALS[p.goal].parts, false).missing === 0;
+    status = can ? `<span class="can">You can make your goal!</span> Fill the boxes (or select the cards) and tap Lay down.` : "Save cards for your goal in the boxes, then discard one card.";
+  } else status = canHit ? "Tap a green group to add your card, or discard it." : "Add cards to any group, then discard one card.";
+  document.getElementById("status").innerHTML = `${status}${lastAction ? `<small>${lastAction}</small>` : ""}`;
+  // Goal
+  const goal = GOALS[Math.min(p.goal, GOALS.length - 1)];
+  const fitsTable = c => myTurn() && match.phase === "play" && p.laid && match.table.some(g => fitsGroup(g, c));
+  const boxes = p.laid ? "" : `<div class="boxes" style="--n:${goal.parts.length}">${goal.parts.map((part, k) => {
+    const cards = L.boxes[k].map(cardById);
+    const state = boxState(part, cards);
+    const label = { empty: "", done: "✓ ready", partial: `${cards.length}/${part.size}`, wrong: "doesn't fit" }[state];
+    return `<div class="box ${state} ${selected.size ? "can-drop" : ""}" data-box="${k}" aria-label="${partLabel(part)} box, ${cards.length} card${cards.length === 1 ? "" : "s"}">
+      <div class="bhead"><span class="bname">${partLabel(part)}</span><span class="bstate">${label}</span>${cards.length ? `<button class="bclear" data-clear="${k}" aria-label="Move these cards back to your hand">↩</button>` : ""}</div>
+      <div class="bcards">${cards.length ? cards.map(c => cardHTML(c, (selected.has(c.id) ? "sel " : "") + (fitsTable(c) ? "fits" : ""), `data-id="${c.id}" role="button" tabindex="0"`)).join("") : `<span class="empty-hint">${selected.size ? "Tap to add selected" : "Drag cards here"}</span>`}</div>
+    </div>`;
+  }).join("")}</div>`;
+  document.getElementById("goal").innerHTML = `<div class="goal-head"><span class="g"><b>Goal ${Math.min(p.goal + 1, GOALS.length)} of ${GOALS.length}</b>${goal.text}</span>${p.laid ? `<span class="done">✓ Laid down</span>` : `<span class="pts">${p.score} pts</span>`}</div>${boxes}`;
+  // Hand, in your order
+  const hand = L.order.map(cardById);
+  const handEl = document.getElementById("hand");
+  // Overlap the cards just enough that the whole hand fits, leaving room for the selection outline.
+  const width = (handEl.clientWidth || 340) - 8, cardW = innerHeight <= 720 ? 50 : 58;
+  const overlap = hand.length > 1 ? Math.min(6, (width - cardW * hand.length) / (hand.length - 1)) : 0;
+  handEl.style.setProperty("--overlap", overlap + "px");
+  handEl.innerHTML = hand.map(c => cardHTML(c, (selected.has(c.id) ? "sel " : "") + (fitsTable(c) ? "fits" : ""), `data-id="${c.id}" role="button" tabindex="0"`)).join("")
+    || `<span class="empty-hint" style="margin:auto;color:var(--ink-soft);font-size:13px">All your cards are in the goal boxes</span>`;
+  // Actions
+  const playing = myTurn() && match.phase === "play";
+  document.getElementById("actions").innerHTML = `
+    <button class="btn" id="sort">${sortBy === "number" ? "Sort 1–12" : "Sort by colour"}</button>
+    <button class="btn" id="lay" ${playing && !p.laid && (selected.size || L.boxes.some(b => b.length)) ? "" : "disabled"}>Lay down</button>
+    <button class="btn primary" id="toss" ${playing && selected.size === 1 ? "" : "disabled"}>Discard</button>`;
+  document.getElementById("sort").onclick = sortHand;
+  document.getElementById("lay").onclick = tryLayDown;
+  document.getElementById("toss").onclick = tryDiscard;
+}
+
+/* ---------- 5. Sheets, Android hooks, startup ---------- */
+function openSheet(html, onReady, dismissable = true) {
+  layer.innerHTML = `<div class="overlay" id="overlay"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const overlay = document.getElementById("overlay");
+  if (dismissable) overlay.addEventListener("click", e => { if (e.target === overlay) closeSheet(); });
+  overlay.dataset.dismissable = dismissable ? "1" : "";
+  if (onReady) onReady(overlay);
+}
+function closeSheet() { layer.innerHTML = ""; }
+
+function openRoundEnd() {
+  if (layer.childElementCount) return;
+  const out = match.players[match.outPlayer];
+  const rows = match.roundResults.map((r, i) => `<tr><td>${r.name}</td><td>${r.finished ? `<span class="up">✓ goal ${r.goal}</span>` : "—"}</td><td class="num">+${r.points}</td><td class="num">${match.players[i].score}</td></tr>`).join("");
+  if (match.over) {
+    const youWon = match.winners.includes(0);
+    if (youWon) { stats.won++; if (stats.bestScore == null || me().score < stats.bestScore) stats.bestScore = me().score; }
+    save();
+    const names = match.winners.map(i => match.players[i].name);
+    openSheet(`<span class="kicker">Game over</span>
+      <h3>${youWon ? (names.length > 1 ? "You tied for the win!" : "You win!") : `${andList(names)} win${names.length > 1 ? "" : "s"}.`}</h3>
+      <p>${youWon ? `All eight goals with ${me().score} points.` : "The lowest score among players who finished goal 8 wins."}</p>
+      <table class="scores"><tr><th>Player</th><th>This round</th><th class="num">Points</th><th class="num">Total</th></tr>${rows}</table>
+      <button class="btn primary" id="again">New game</button><button class="btn" id="leave">Done</button>`, o => {
+        o.querySelector("#again").onclick = () => { closeSheet(); startMatch(); };
+        o.querySelector("#leave").onclick = () => { closeSheet(); match = null; store.remove("qc-match"); showStart(); };
+      }, false);
+    return;
+  }
+  openSheet(`<span class="kicker">Round ${match.round} over</span>
+    <h3>${match.outPlayer === 0 ? "You went out!" : `${out.name} went out.`}</h3>
+    <p>Everyone who laid down their goal moves on to the next one. Cards left in hands count as points: 5 for 1–9, 10 for 10–12, 25 for a wild.</p>
+    <table class="scores"><tr><th>Player</th><th>Goal</th><th class="num">Points</th><th class="num">Total</th></tr>${rows}</table>
+    <button class="btn primary" id="next">Deal round ${match.round + 1}</button>`, o => {
+      o.querySelector("#next").onclick = () => { closeSheet(); startRound(match, Math.random); lastAction = ""; selected.clear(); save(); render(); runComputers(); };
+    }, false);
+}
+
+function openHelp() {
+  const current = match ? me().goal : -1;
+  openSheet(`<h3>How to play</h3>
+    <ol>
+      <li>On your turn, take the top card from the <b>pile</b> or the <b>discard</b> (wilds can't be taken from the discard).</li>
+      <li>Save cards for your <b>goal</b> by dragging them into its boxes (or select cards and tap a box). Drag cards around your hand to arrange them any way you like.</li>
+      <li>When every box shows ✓, tap <b>Lay down</b>. You can also select the cards instead. You lay down the whole goal at once.</li>
+      <li>Once your goal is down, you can <b>add</b> cards to any group on the table: select one card and tap a green group.</li>
+      <li>End your turn by selecting one card and tapping <b>Discard</b>.</li>
+      <li>The round ends when someone runs out of cards. If you laid down your goal, you move on to the next one.</li>
+    </ol>
+    <h4>Groups</h4>
+    <ul><li><b>Set</b>: cards with the same number, like 7, 7, 7.</li><li><b>Run</b>: numbers in a row, any colours, like 4, 5, 6, 7.</li><li><b>Colour</b>: cards that are all the same colour. Each colour has its own shape.</li><li><b>★ Wild</b>: stands in for any card. Every group needs at least one real card.</li></ul>
+    <h4>The eight goals</h4>
+    <ol>${GOALS.map((g, i) => `<li class="${i === current ? "now" : i < current ? "past" : ""}">${g.text}</li>`).join("")}</ol>
+    <p>Points: 5 for cards 1–9, 10 for 10–12, 25 for a wild left in your hand. When someone finishes goal 8, the game ends and the lowest score among players who finished wins.</p>
+    <button class="btn" id="close">Close</button>`, o => (o.querySelector("#close").onclick = closeSheet));
+}
+
+let toastTimer = null;
+function toast(message) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div");
+  t.className = "toast"; t.setAttribute("role", "status"); t.textContent = message;
+  document.body.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 2400);
+}
+function goHome() { clearTimeout(aiTimer); if (match) save(); location.href = "index.html"; }
+
+window.addEventListener("resize", () => { if (match && document.getElementById("hand")) render(); });
+window.androidBack = function () {
+  if (layer.childElementCount) { if (document.getElementById("overlay")?.dataset.dismissable) closeSheet(); return true; }
+  if (document.getElementById("hand")) { clearTimeout(aiTimer); save(); showStart(); return true; }
+  goHome();
+  return true;
+};
+window.androidPause = () => { if (match) save(); };
+
+if (match && match.over) { match = null; store.remove("qc-match"); }
+showStart();
+</script>
+</body>
+</html>
