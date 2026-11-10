@@ -72,6 +72,7 @@ footer { margin-top: auto; color: var(--ink-soft); font-size: 12px; text-align: 
   <header>
     <h1>Quiet Games</h1>
     <p>No ads, no pop-ups. Just the games.</p>
+    <p id="updated" hidden style="margin-top:6px;font-size:13px;color:var(--words)">✓ Updated over the internet, no download needed.</p>
   </header>
   <nav class="games" id="games"></nav>
   <footer id="footer">Everything stays on this device.</footer>
@@ -79,7 +80,7 @@ footer { margin-top: auto; color: var(--ink-soft); font-size: 12px; text-align: 
 <script>
 "use strict";
 // The version of the games, shown at the bottom so you can tell an update has arrived.
-const GAMES_VERSION = "1.9";
+const GAMES_VERSION = "1.9.1";
 // Loaded from the website (or a test server on this computer), rather than the copy inside the app?
 const ONLINE = location.protocol === "https:" || location.hostname === "localhost";
 
@@ -148,6 +149,8 @@ document.getElementById("games").innerHTML = GAMES.map(g => `
     <span class="go" aria-hidden="true">${arrow}</span>
   </a>`).join("");
 
+// Test update (1.9.1): only shows on the website version, to prove updates arrive by themselves.
+if (ONLINE) document.getElementById("updated").hidden = false;
 document.getElementById("footer").textContent = `Version ${GAMES_VERSION} · ${ONLINE ? "updates itself when you're online" : "built-in copy"} · Everything stays on this device.`;
 
 // Android back button on the home screen closes the app.
